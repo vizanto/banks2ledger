@@ -38,7 +38,7 @@
 
 ;; P_occur is the occurrence probability of token among
 ;; all tokens recorded for account.
-;; acc-maps is the output of parse-ledger.
+;; acc-maps is the output of parse-ledger or parse-beancount.
 (defn p_occur [acc-maps token account]
   (let [acc-table (get acc-maps account)
         n_t_a (or (get acc-table token) 0)
@@ -49,7 +49,7 @@
 
 ;; P_belong is the probability that a transaction with
 ;; token in its descriptor belongs to account.
-;; acc-maps is the output of parse-ledger.
+;; acc-maps is the output of parse-ledger or parse-beancount.
 (defn p_belong [acc-maps token account]
   (let [p_occ (p_occur acc-maps token account)
         p_occ_all (apply + (map (fn [acc] (p_occur acc-maps token acc))
@@ -111,12 +111,35 @@
                   (map (partial clip-string "  ")))]
     {:date date :toks toks :accs accs}))
 
+;; Check if first line of entry is of type: transaction
+(defn beancount-transaction? [entry]
+  (re-matches #"(?s)[-0-9]{10}\s+(?:[!*]|txn)\s.+" entry))
+
 ;; Read and parse a ledger file; return acc-maps
 (defn parse-ledger [filename]
   (->> (clojure.string/split (slurp filename) #"\n\n")
        (map clojure.string/trim) ;; remove odd newlines
        (filter #(> (count %) 0))
        (map parse-ledger-entry)
+       (reduce toktab-update {})))
+
+;; Parse a beancount entry from string to acc-map
+(defn parse-beancount-entry [entry]
+  (let [[first-line & rest-lines] (clojure.string/split-lines entry)
+        [_ date flag payee descr tags] (re-matches #"([-0-9]{10})\s+([!*]|txn)\s+(?:\"([^\"]+?)\"\s+)?\"([^\"]+)\"(.*)" first-line)
+        toks (tokenize descr)
+        accs (->> rest-lines
+                  (map clojure.string/trim)
+                  (map (partial clip-string "  ")))]
+    {:date date :toks toks :accs accs}))
+
+;; Read and parse a beancount file; return acc-maps
+(defn parse-beancount [filename]
+  (->> (clojure.string/split (slurp filename) #"\n(\n|(?=[0-9]))")
+       (map clojure.string/trim) ;; remove odd newlines
+       (filter #(> (count %) 0))
+       (filter beancount-transaction?)
+       (map parse-beancount-entry)
        (reduce toktab-update {})))
 
 ;; command line args spec
@@ -321,6 +344,19 @@
            (drop-lines params))
        (map clojure.string/trim-newline)
        (map (partial parse-csv-entry params))))
+
+;; format and print a beancount entry to *out*
+(defn print-beancount-entry [{:keys [date flag payee descr reference metas postings]}]
+  (printf "%s %s \"%s\" \"%s\"" date (or flag "*") payee descr)
+  (when-not (empty? reference) (printf " ^%s" reference))
+  (println)
+  (doseq [[k v] metas]
+    (printf "  %-58s %24s\n" (str k ":") v)) ; conversion-fee: 3 EUR, etc
+  (doseq [{:keys [amount currency account]} postings]
+    (printf "  %-58s" account)
+    (when amount   (printf " %20s" amount))
+    (when currency (printf " %s" currency))
+    (println)))
 
 ;; format and print a ledger entry to *out*
 (defn print-ledger-entry [params acc-maps
