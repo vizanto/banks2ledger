@@ -13,10 +13,11 @@
 
 
 (defn create-postings [liability-account-str,
-                       {:keys [amount reference date posting-date payee description
-                               liability-account charge-amount charge-currency conversion-fee]}]
-  (let [posted-now?  (= date posting-date)
-        account      (str liability-account (if posted-now? "Posted" #_else "Authed"))
+                       {:keys [amount reference date posting-date payee card-account
+                               description charge-amount charge-currency conversion-fee]}]
+  (let [posted-now?    (= date posting-date)
+        authed-account (str liability-account-str ":Authed" (when card-account ":") card-account)
+        posted-account (str liability-account-str ":Posted" (when card-account ":") card-account)
 
         fee-posting
         (when conversion-fee
@@ -31,7 +32,7 @@
            :currency "EUR"})
 
         from-transfer
-        {:account account}
+        {:account (if posted-now? posted-account #_else authed-account)}
 
         to-transfer
         {:account :uncategorized, :amount amount, :currency "EUR"}
@@ -54,9 +55,8 @@
          posting
          (when-not posted-now?
            {:date posting-date, :flag "*", :payee "", :descr description, :reference reference
-            :postings [{:account (str liability-account-str "Authed")
-                        :amount amount, :currency "EUR"}
-                       {:account (str liability-account-str "Posted")}]})]
+            :postings [{:account authed-account, :amount amount, :currency "EUR"}
+                       {:account posted-account}]})]
     (if posted-now?
       [(assoc transaction :descr description)]
      ;else
