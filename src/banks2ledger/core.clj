@@ -18,7 +18,7 @@
 
 ;; Clip string to the part before the given endmark
 ;; endmark is first arg to allow meaningful use of `partial'
-(defn clip-string [endmark string]
+(defn clip-string [^String endmark ^String string]
   (let [end-idx (.indexOf string endmark)]
     (if (= end-idx -1)
       string
@@ -32,10 +32,10 @@
 (defn tokenize [str]
   (->>
    (-> str
-       .toUpperCase
-       (clojure.string/replace #"20\d{6}" "YYYYMMDD")
-       (clojure.string/replace #"/\d{2}-\d{2}-\d{2}" "/YY-MM-DD")
-       (clojure.string/split #",|/| "))
+       (str/upper-case)
+       (str/replace #"20\d{6}" "YYYYMMDD")
+       (str/replace #"\d{2}-\d{2}-\d{2}" "YY-MM-DD")
+       (str/split #",|/| "))
    (filter #(> (count %) 0))))
 
 ;; P_occur is the occurrence probability of token among
@@ -92,7 +92,7 @@
 (defn account-for-descr [acc-maps descr account]
   (let [tokens (tokenize descr)
         p_tab (p_table acc-maps tokens)]
-    (filter #(= false (.contains ^String (second %) account)) p_tab)))
+    (remove #(str/includes? (second %) account) p_tab)))
 
 (defn decide-account [acc-maps descr account]
   (let [accs (account-for-descr acc-maps descr account)]
@@ -136,13 +136,13 @@
 
 ;; Parse a beancount entry from string to acc-map
 (defn parse-beancount-entry [entry]
-  (let [[first-line & rest-lines] (clojure.string/split-lines entry)
+  (let [[first-line & rest-lines] (str/split-lines entry)
         [_ date flag payee descr extra] (re-matches beancount-transaction-re first-line)
         tags  (when extra (re-seq beancount-tags-re extra))
         links (when extra (re-seq beancount-links-re extra))
         toks  (concat (tokenize (or payee "")) (tokenize (or descr "")))
         accs  (->> rest-lines
-                   (map clojure.string/trim)
+                   (map str/trim)
                    (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
                    (map (partial clip-string " ")))]
     {:date date :toks toks :accs accs
@@ -150,8 +150,8 @@
 
 ;; Read and parse a beancount file; return acc-maps
 (defn parse-beancount [filename]
-  (->> (clojure.string/split (slurp filename) #"\n(\n|(?=[0-9]))")
-       (map clojure.string/trim) ;; remove odd newlines
+  (->> (str/split (slurp filename) #"\n(\n|(?=[0-9]))")
+       (map str/trim) ;; remove odd newlines
        (filter #(> (count %) 0))
        (filter beancount-transaction?)
        (map parse-beancount-entry)
@@ -178,11 +178,11 @@
    {:opt "-F" :value "," :help "CSV field separator"}
 
    :csv-skip-header-lines
-   {:opt "-sa" :value 0 :conv-fun #(Integer. %)
+   {:opt "-sa" :value 0 :conv-fun #(Integer. (str %))
     :help "CSV header lines to skip"}
 
    :csv-skip-trailer-lines
-   {:opt "-sz" :value 0 :conv-fun #(Integer. %)
+   {:opt "-sz" :value 0 :conv-fun #(Integer. (str %))
     :help "CSV trailer lines to skip"}
 
    :currency
@@ -192,15 +192,15 @@
    {:opt "-D" :value "yyyy-MM-dd" :help "Format of date field in CSV file"}
 
    :date-col
-   {:opt "-d" :value 0 :conv-fun #(Integer. %)
+   {:opt "-d" :value 0 :conv-fun #(Integer. (str %))
     :help "Date column index (zero-based)"}
 
    :ref-col
-   {:opt "-r" :value -1 :conv-fun #(Integer. %)
+   {:opt "-r" :value -1 :conv-fun #(Integer. (str %))
     :help "Payment reference column index (zero-based)"}
 
    :amount-col
-   {:opt "-m" :value 2 :conv-fun #(Integer. %)
+   {:opt "-m" :value 2 :conv-fun #(Integer. (str %))
     :help "Amount column index (zero-based)"}
 
    :descr-col
@@ -266,7 +266,7 @@
 (defn convert-amount [string]
   (->>
    (-> (re-find #"-?\d[\d ]*[,\.]?\d*" string)
-       (clojure.string/replace #"," ".")
+       (str/replace #"," ".")
        (.replace " " "")
        (Double.))
    (format "%,.2f")))
@@ -276,16 +276,16 @@
   (let [len (count str)
         last (dec len)]
     (cond (< len 3) str
-          (or (and (.startsWith str "'") (.endsWith str "'"))
-              (and (.startsWith str "\"") (.endsWith str "\"")))
+          (or (and (str/starts-with? str "'")  (str/ends-with? str "'"))
+              (and (str/starts-with? str "\"") (str/ends-with? str "\"")))
           (subs str 1 last)
           :else str)))
 
 (defn all-indices-1 [str sub pos acc]
-  (let [idx (.indexOf str sub pos)]
-    (if (= idx -1)
-      acc
-      (all-indices-1 str sub (inc idx) (conj acc idx)))))
+  (if-let [idx (str/index-of str sub pos)]
+    (all-indices-1 str sub (inc idx) (conj acc idx))
+   ;else
+    acc))
 
 ;; Return an array of all indices where sub starts within str
 (defn all-indices [str sub]
@@ -316,9 +316,9 @@
 ;; return whitespace-trimmed version.
 (defn format-colspec [cols colspec]
   (-> colspec
-      (clojure.string/replace #"\%(\d)*"
-             #(unquote-string (nth cols (Integer. (second %1)))))
-      (clojure.string/trim)))
+      (str/replace #"\%(\d)*"
+             #(unquote-string (nth cols (Integer. (str (second %1))))))
+      (str/trim)))
 
 (defn get-col-1 [cols [spec & spec-list]]
   (let [fmt (format-colspec cols spec)]
@@ -370,9 +370,9 @@
 ;; Parse input CSV into a list of maps
 (defn parse-csv [params]
   (->> (-> (slurp (get-arg params :csv-file))
-           (clojure.string/split #"\n")
+           (str/split #"\n")
            (drop-lines params))
-       (map clojure.string/trim-newline)
+       (map str/trim-newline)
        (mapcat #(parse-csv-entry params %))))
 
 (defn decide-all-accounts [acc-maps payee postings]

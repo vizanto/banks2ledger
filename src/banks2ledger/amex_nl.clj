@@ -91,7 +91,7 @@
   (let [[amount currency fee :as regex]
         (next (re-matches #"([0-9.]+)\s+([A-Z]{3,})\s+COMM\.FEE\s+([0-9.]+).*" notes))]
     (if amount
-      [(BigDecimal. amount) currency (BigDecimal. fee)])))
+      [(BigDecimal. ^String amount) currency (BigDecimal. ^String fee)])))
 
 (defn parse-csv-columns [liability-account-str, [date reference amount payee notes :as csv]]
   (let [[charge-amount charge-currency conversion-fee]
