@@ -123,15 +123,28 @@
        (map parse-ledger-entry)
        (reduce toktab-update {})))
 
+(def beancount-transaction-re
+  #"([-0-9]{10})\s+([!*]|txn)\s+(?:(?:\"([^\"]*?)\"\s+)?\"([^\"]*)\")(.*)")
+
+(def beancount-tags-re
+  #"#[-A-Za-z0-9_/.]+")
+
+(def beancount-links-re
+  #"\^[-A-Za-z0-9_/.]+")
+
 ;; Parse a beancount entry from string to acc-map
 (defn parse-beancount-entry [entry]
   (let [[first-line & rest-lines] (clojure.string/split-lines entry)
-        [_ date flag payee descr tags] (re-matches #"([-0-9]{10})\s+([!*]|txn)\s+(?:\"([^\"]+?)\"\s+)?\"([^\"]+)\"(.*)" first-line)
-        toks (tokenize descr)
-        accs (->> rest-lines
-                  (map clojure.string/trim)
-                  (map (partial clip-string "  ")))]
-    {:date date :toks toks :accs accs}))
+        [_ date flag payee descr extra] (re-matches beancount-transaction-re first-line)
+        tags  (when extra (re-seq beancount-tags-re extra))
+        links (when extra (re-seq beancount-links-re extra))
+        toks  (concat (tokenize (or payee "")) (tokenize (or descr "")))
+        accs  (->> rest-lines
+                   (map clojure.string/trim)
+                   (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
+                   (map (partial clip-string " ")))]
+    {:date date :toks toks :accs accs
+     :tags tags :links links :reference (first links)}))
 
 ;; Read and parse a beancount file; return acc-maps
 (defn parse-beancount [filename]
