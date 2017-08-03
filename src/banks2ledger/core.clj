@@ -1,5 +1,6 @@
 (ns banks2ledger.core
-  (:require [banks2ledger.amex-nl :as amex-nl])
+  (:require [banks2ledger.amex-nl :as amex-nl]
+            [clojure.string :as str])
   (:gen-class))
 
 ;; Bump account's token counter for token
@@ -422,8 +423,12 @@
 ;; Convert CSV of bank account transactions to corresponding ledger entries
 (defn -main [& args]
   (let [params (parse-args cl-args-spec args)
-        acc-maps (parse-ledger (get-arg params :ledger-file))
+        ledger-file (get-arg params :ledger-file)
         csv-maps (parse-csv params)]
-    (doseq [cm csv-maps]
-      (print-ledger-entry acc-maps cm))
+    (if (str/ends-with? ledger-file ".beancount")
+      (let [acc-maps (parse-beancount ledger-file)]
+        (doseq [cm csv-maps] (print-beancount-entry acc-maps cm)))
+     ;else
+      (let [acc-maps (parse-ledger ledger-file)]
+        (doseq [cm csv-maps] (print-ledger-entry acc-maps cm))))
     (flush)))
