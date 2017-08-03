@@ -1,6 +1,9 @@
 (ns banks2ledger.core
   (:require [banks2ledger.amex-nl :as amex-nl]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [clojure.java.io :as io]
+            [cheshire.core :as json]
+            [cheshire.parse :refer (*use-bigdecimals?*)])
   (:gen-class))
 
 ;; Bump account's token counter for token
@@ -172,7 +175,7 @@
     :help "Originating account of transactions"}
 
    :file-kind
-   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-CSV or CSV (default: CSV)"}
+   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-JSON, AMEX-CSV or CSV (default: CSV)"}
 
    :csv-field-separator
    {:opt "-F" :value "," :help "CSV field separator"}
@@ -263,12 +266,12 @@
 ;; Convert amount string - note the return value is still a string!
 ;; - strip anything that does not belong to the number
 ;; - change decimal comma to dot
-(defn convert-amount [string]
+(defn convert-amount [^String string]
   (->>
    (-> (re-find #"-?\d[\d ]*[,\.]?\d*" string)
        (str/replace #"," ".")
        (.replace " " "")
-       (Double.))
+       (BigDecimal.))
    (format "%,.2f")))
 
 ;; Remove quotes from start & end of the string, if both present
@@ -375,6 +378,17 @@
        (map str/trim-newline)
        (mapcat #(parse-csv-entry params %))))
 
+;; Parse input JSON into a list of maps
+(defn parse-json [params]
+  (let [account (get-arg params :account)
+        json    (binding [*use-bigdecimals?* true]
+                  (-> (get-arg params :csv-file)
+                      (io/reader)
+                      (json/parse-stream true)))]
+    (case (get-arg params :file-kind)
+      "AMEX-JSON"
+      (mapcat #(amex-nl/parse-json-transaction account %) (:transactions json)))))
+
 (defn decide-all-accounts [acc-maps payee postings]
   (let [main-account (->> postings (map :account) (remove #(= % :uncategorized)) first)]
     (for [{:keys [account] :as entry} postings]
@@ -422,13 +436,21 @@
 
 ;; Convert CSV of bank account transactions to corresponding ledger entries
 (defn -main [& args]
-  (let [params (parse-args cl-args-spec args)
+  (let [params      (parse-args cl-args-spec args)
         ledger-file (get-arg params :ledger-file)
-        csv-maps (parse-csv params)]
+        file-kind   (get-arg params :file-kind)
+
+        postings
+        (case file-kind
+          ("CSV", "AMEX-CSV")
+          (parse-csv params)
+
+          "AMEX-JSON"
+          (parse-json params))]
     (if (str/ends-with? ledger-file ".beancount")
       (let [acc-maps (parse-beancount ledger-file)]
-        (doseq [cm csv-maps] (print-beancount-entry acc-maps cm)))
+        (doseq [entry postings] (print-beancount-entry acc-maps entry)))
      ;else
       (let [acc-maps (parse-ledger ledger-file)]
-        (doseq [cm csv-maps] (print-ledger-entry acc-maps cm))))
+        (doseq [entry postings] (print-ledger-entry acc-maps entry))))
     (flush)))

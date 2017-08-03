@@ -1,5 +1,6 @@
 (ns banks2ledger.amex-nl
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cheshire.core :as json]))
 
 ;;
 ;; American Express
@@ -74,6 +75,12 @@
 ;;; CSV Parsing
 ;;;
 
+(defn str->decimal [amount]
+  (-> (str/trim amount)
+      (str/replace #"[.,](?=[0-9]{3})" "")
+      (str/replace #",(?=[0-9]{2}$)" ".")
+      (BigDecimal.)))
+
 (defn normalize-date [date-str]
   (str "20" (subs date-str 6 8) "-" (subs date-str 3 5) "-" (subs date-str 0 2)))
 
@@ -97,7 +104,7 @@
   (let [[charge-amount charge-currency conversion-fee]
         (notes->forex notes)]
     (create-postings liability-account-str,
-     {:amount          (BigDecimal. (str/replace (str/trim amount) #"," "."))
+     {:amount          (str->decimal amount)
       :reference       (-> reference (str/replace #"Reference: " "") (str/replace #"\s" "-"))
       :date            (normalize-date date)
       :posting-date    (notes->posting-date notes)
@@ -106,3 +113,24 @@
       :charge-amount   charge-amount
       :charge-currency charge-currency
       :conversion-fee  conversion-fee})))
+
+;;;
+;;; JSON Parsing
+;;;
+
+(defn parse-json-transaction
+  [liability-account-str,
+   {:keys [description amount first_name foreign_details reference_id type charge_date identifier
+           statement_end_date last_name embossed_name supplementary_index post_date]}]
+  {:pre [(-> amount decimal?)]}
+  (create-postings liability-account-str,
+   {:amount          amount
+    :reference       reference_id
+    :date            charge_date
+    :posting-date    post_date
+    :card-account    (clojure.string/capitalize first_name)
+    :payee           description
+    :description     ""
+    :charge-amount   (some-> foreign_details :amount str->decimal)
+    :charge-currency (some-> foreign_details :iso_alpha_currency_code)
+    :conversion-fee  (some-> foreign_details :commission_amount)}))
