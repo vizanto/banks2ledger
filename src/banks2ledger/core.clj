@@ -346,16 +346,24 @@
        (map (partial parse-csv-entry params))))
 
 ;; format and print a beancount entry to *out*
-(defn print-beancount-entry [{:keys [date flag payee descr reference metas postings]}]
-  (printf "%s %s \"%s\" \"%s\"" date (or flag "*") payee descr)
+(defn print-beancount-entry [acc-maps
+                             {:keys [date flag payee descr reference metas postings]}]
+  (printf "\n%s %s \"%s\" \"%s\"" date (or flag "*") (str payee) (str descr))
   (when-not (empty? reference) (printf " ^%s" reference))
   (println)
   (doseq [[k v] metas]
     (printf "  %-58s %24s\n" (str k ":") v)) ; conversion-fee: 3 EUR, etc
-  (doseq [{:keys [amount currency account]} postings]
-    (printf "  %-58s" account)
-    (when amount   (printf " %20s" amount))
-    (when currency (printf " %s" currency))
+  (doseq [{:keys [amount currency account commented]} postings]
+    (printf (if-not commented "  %-58s" #_else " ;%-58s")
+            (if (= :uncategorized account)
+              (decide-account acc-maps payee
+                              (->> postings (filter #(-> % :account (= :uncategorized) not))
+                                   first :account))
+            ;else
+              account))
+    (when amount
+      (printf " %20s" amount)
+      (when currency (printf " %s" currency)))
     (println)))
 
 ;; format and print a ledger entry to *out*
