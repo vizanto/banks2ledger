@@ -7,6 +7,8 @@
 
 (def conversion-account-str "Expenses:Bank-fees:NL:AMEX:Conversion")
 
+(defn abs [n] (if (neg? n) (- n) #_else n))
+
 ;;;
 ;;; Beancount/ledger posting data
 ;;;
@@ -15,9 +17,15 @@
 (defn create-postings [liability-account-str,
                        {:keys [amount reference date posting-date payee card-account
                                description charge-amount charge-currency conversion-fee]}]
+  {:pre [amount date
+         (or (nil? charge-amount)  (pos? charge-amount))
+         (or (nil? conversion-fee) (pos? conversion-fee))]}
   (let [posted-now?    (= date posting-date)
         authed-account (str liability-account-str ":Authed" (when card-account ":") card-account)
         posted-account (str liability-account-str ":Posted" (when card-account ":") card-account)
+
+        charge-amount
+        (if-not (neg? amount) charge-amount #_else (when charge-amount (- charge-amount)))
 
         fee-posting
         (when conversion-fee
@@ -27,8 +35,8 @@
         forex-posting
         (when charge-amount
           {:commented true, :account :uncategorized
-           :amount (str (when (neg? amount) "-") charge-amount " " charge-currency
-                        " @@ " (- amount conversion-fee))
+           :amount (str charge-amount " " charge-currency
+                        " @@ " (-> amount (- (or conversion-fee 0)) abs))
            :currency "EUR"})
 
         from-transfer
