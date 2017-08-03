@@ -169,6 +169,9 @@
    {:opt "-a" :value "Assets:Checking"
     :help "Originating account of transactions"}
 
+   :file-kind
+   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-CSV or CSV (default: CSV)"}
+
    :csv-field-separator
    {:opt "-F" :value "," :help "CSV field separator"}
 
@@ -342,14 +345,18 @@
         account (get-arg params :account)
         currency (get-arg params :currency)
         amount (convert-amount (nth cols (get-arg params :amount-col)))]
-    {:date (convert-date params (nth cols (get-arg params :date-col)))
-     :reference (if (< ref-col 0) nil (unquote-string (nth cols ref-col)))
-     :postings
-     (if (= \- (first amount))
-       [{:account :uncategorized :currency currency :amount (subs amount 1)} {:account account}]
-      ;else
-       [{:account account :currency currency :amount amount} {:account :uncategorized}])
-     :descr (unquote-string (get-col cols (get-arg params :descr-col)))}))
+    (case (get-arg params :file-kind)
+     ;"AMEX-CSV"   (amex-nl/parse-csv-columns cols)
+
+      "CSV"
+      [{:date (convert-date params (nth cols (get-arg params :date-col)))
+        :reference (if (< ref-col 0) nil (unquote-string (nth cols ref-col)))
+        :postings
+        (if (= \- (first amount))
+          [{:account :uncategorized :currency currency :amount (subs amount 1)} {:account account}]
+         ;else
+          [{:account account :currency currency :amount amount} {:account :uncategorized}])
+        :descr (unquote-string (get-col cols (get-arg params :descr-col)))}])))
 
 ;; Drop the configured number of header and trailer lines
 (defn drop-lines [lines params]
@@ -363,7 +370,7 @@
            (clojure.string/split #"\n")
            (drop-lines params))
        (map clojure.string/trim-newline)
-       (map (partial parse-csv-entry params))))
+       (mapcat #(parse-csv-entry params %))))
 
 (defn decide-all-accounts [acc-maps payee postings]
   (let [main-account (->> postings (map :account) (remove #(= % :uncategorized)) first)]
