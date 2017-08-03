@@ -1,4 +1,5 @@
 (ns banks2ledger.core
+  (:require [banks2ledger.amex-nl :as amex-nl])
   (:gen-class))
 
 ;; Bump account's token counter for token
@@ -346,7 +347,8 @@
         currency (get-arg params :currency)
         amount (convert-amount (nth cols (get-arg params :amount-col)))]
     (case (get-arg params :file-kind)
-     ;"AMEX-CSV"   (amex-nl/parse-csv-columns cols)
+      "AMEX-CSV"
+      (amex-nl/parse-csv-columns account cols)
 
       "CSV"
       [{:date (convert-date params (nth cols (get-arg params :date-col)))
