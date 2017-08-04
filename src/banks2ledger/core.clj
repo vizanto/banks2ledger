@@ -141,8 +141,8 @@
 (defn parse-beancount-entry [entry]
   (let [[first-line & rest-lines] (str/split-lines entry)
         [_ date flag payee descr extra] (re-matches beancount-transaction-re first-line)
-        tags  (when extra (re-seq beancount-tags-re extra))
-        links (when extra (re-seq beancount-links-re extra))
+        tags  (some->> extra (re-seq beancount-tags-re)  (map #(subs % 1)))
+        links (some->> extra (re-seq beancount-links-re) (map #(subs % 1)))
         toks  (concat (tokenize (or payee "")) (tokenize (or descr "")))
         accs  (->> rest-lines
                    (map str/trim)
