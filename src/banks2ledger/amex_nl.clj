@@ -7,6 +7,7 @@
 ;;
 
 (def conversion-account-str "Expenses:Bank-fees:NL:AMEX:Conversion")
+(def internal-payees #{"HARTELIJK BEDANKT VOOR UW BETALING"})
 
 (defn abs [n] (if (neg? n) (- n) #_else n))
 
@@ -24,6 +25,15 @@
   (let [posted-now?    (= date posting-date)
         authed-account (str liability-account-str ":Authed" (when card-account ":") card-account)
         posted-account (str liability-account-str ":Posted" (when card-account ":") card-account)
+
+        regular-transaction?
+        (and (nil? (internal-payees payee)) (str/starts-with? reference "AT"))
+
+        description
+        (if regular-transaction? description #_else (str/trim (str payee " " description)))
+
+        payee
+        (if regular-transaction? payee #_else "American Express")
 
         charge-amount
         (if-not (neg? amount) charge-amount #_else (when charge-amount (- charge-amount)))

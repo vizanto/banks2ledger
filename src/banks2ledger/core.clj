@@ -410,7 +410,7 @@
   (doseq [[k v] metas]
     (printf (str "  %s %" (not0 (- 75 (count k))) "s\n") (str k ":") v))
   (doseq [{:keys [amount currency account commented]}
-          (decide-all-accounts acc-maps (or payee descr "") postings)]
+          (decide-all-accounts acc-maps (str payee " " descr) postings)]
     (printf (if-not commented "  %s" #_else " ;%s") account)
     (when amount
       (printf (str " %" (not0 (- 72 (count account))) "s") amount)
