@@ -397,21 +397,23 @@
        ;else
         entry))))
 
+(defn- not0 [n] (if (>= 0 n) 1 #_else n))
+
 ;; format and print a beancount entry to *out*
 (defn print-beancount-entry [acc-maps
                              {:keys [date flag payee descr reference metas postings]}]
   (printf "\n%s %s \"%s\" \"%s\"" date (or flag "*") (str payee) (str descr))
   (when-not (empty? reference)
-    (printf (str" %" (- 60 (count payee) (count descr)) "s")
+    (printf (str" %" (not0 (- 60 (count payee) (count descr))) "s")
             (str "^" reference)))
   (println)
   (doseq [[k v] metas]
-    (printf (str "  %s %" (- 75 (count k)) "s\n") (str k ":") v)) ; conversion-fee: 3 EUR, etc
+    (printf (str "  %s %" (not0 (- 75 (count k))) "s\n") (str k ":") v))
   (doseq [{:keys [amount currency account commented]}
           (decide-all-accounts acc-maps (or payee descr "") postings)]
     (printf (if-not commented "  %s" #_else " ;%s") account)
     (when amount
-      (printf (str " %" (- 72 (count account)) "s") amount)
+      (printf (str " %" (not0 (- 72 (count account))) "s") amount)
       (when currency (printf " %s" currency)))
     (println)))
 
