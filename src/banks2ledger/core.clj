@@ -37,7 +37,7 @@
    (-> str
        (str/upper-case)
        (str/replace #"20\d{6}" "YYYYMMDD")
-       (str/replace #"\d{2}-\d{2}-\d{2}" "YY-MM-DD")
+       (str/replace #"\d{2}[-/]\d{2}[-/]\d{2}" "YY-MM-DD")
        (str/split #",|/| "))
    (filter #(> (count %) 0))))
 
