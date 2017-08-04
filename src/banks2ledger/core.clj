@@ -148,17 +148,19 @@
                    (map str/trim)
                    (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
                    (map (partial clip-string " ")))]
-    {:date date :toks toks :accs accs
+    {:date date :toks toks :accs accs :flag flag
      :tags tags :links links :reference (first links)}))
 
 ;; Read and parse a beancount file; return acc-maps
 (defn parse-beancount [filename]
-  (->> (str/split (slurp filename) #"\n(\n|(?=[0-9]))")
-       (map str/trim) ;; remove odd newlines
-       (filter #(> (count %) 0))
-       (filter beancount-transaction?)
-       (map parse-beancount-entry)
-       (reduce toktab-update {})))
+  (let [entries
+        (->> (str/split (slurp filename) #"\n(\n|(?=[0-9]))")
+             (map str/trim) ;; remove odd newlines
+             (filter #(> (count %) 0))
+             (filter beancount-transaction?)
+             (map parse-beancount-entry))]
+    ; Return toktab and map of entries by unique-reference
+    [(reduce toktab-update {} entries), (group-by :reference entries)]))
 
 ;; command line args spec
 (def cl-args-spec
@@ -379,7 +381,7 @@
        (mapcat #(parse-csv-entry params %))))
 
 ;; Parse input JSON into a list of maps
-(defn parse-json [params]
+(defn parse-json [params existing-txn]
   (let [account (get-arg params :account)
         json    (binding [*use-bigdecimals?* true]
                   (-> (get-arg params :csv-file)
@@ -387,7 +389,7 @@
                       (json/parse-stream true)))]
     (case (get-arg params :file-kind)
       "AMEX-JSON"
-      (mapcat #(amex-nl/parse-json-transaction account %) (:transactions json)))))
+      (mapcat #(amex-nl/parse-json-transaction existing-txn account %) (:transactions json)))))
 
 (defn decide-all-accounts [acc-maps payee postings unknown-account]
   (let [main-account (->> postings (map :account) (remove #(= % :uncategorized)) first)]
@@ -436,23 +438,24 @@
       (println))
     (println)))
 
+(defn read-file [params existing-txn]
+  (case (get-arg params :file-kind)
+    ("CSV", "AMEX-CSV")
+    (parse-csv params)
+
+    "AMEX-JSON"
+    (parse-json params existing-txn)))
+
 ;; Convert CSV of bank account transactions to corresponding ledger entries
 (defn -main [& args]
   (let [params      (parse-args cl-args-spec args)
-        ledger-file (get-arg params :ledger-file)
-        file-kind   (get-arg params :file-kind)
-
-        postings
-        (case file-kind
-          ("CSV", "AMEX-CSV")
-          (parse-csv params)
-
-          "AMEX-JSON"
-          (parse-json params))]
+        ledger-file (get-arg params :ledger-file)]
     (if (str/ends-with? ledger-file ".beancount")
-      (let [acc-maps (parse-beancount ledger-file)]
-        (doseq [entry postings] (print-beancount-entry acc-maps entry)))
+      (let [[acc-maps existing-txn] (parse-beancount ledger-file)]
+        (doseq [entry (read-file params existing-txn)]
+          (print-beancount-entry acc-maps entry)))
      ;else
       (let [acc-maps (parse-ledger ledger-file)]
-        (doseq [entry postings] (print-ledger-entry acc-maps entry))))
+        (doseq [entry (read-file params nil)]
+          (print-ledger-entry acc-maps entry))))
     (flush)))
