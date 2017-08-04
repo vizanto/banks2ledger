@@ -148,7 +148,7 @@
                    (map str/trim)
                    (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
                    (map (partial clip-string " ")))]
-    {:date date :toks toks :accs accs :flag flag
+    {:date date :toks toks :accs accs :flag flag :descr descr
      :tags tags :links links :reference (first links)}))
 
 ;; Read and parse a beancount file; return acc-maps

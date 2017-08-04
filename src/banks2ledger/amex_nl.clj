@@ -63,7 +63,7 @@
         {:date      date
          :flag      (:flag existing-transaction "!")
          :payee     payee
-         :descr     (when posted-now? description)
+         :descr     (:descr existing-transaction (when posted-now? description))
          :reference reference
          :metas     (when forex-posting
                       {"conversion-fee" (str conversion-fee " EUR")
@@ -80,7 +80,8 @@
 
         posting
         (when-not posted-now?
-          {:date posting-date, :flag (:flag existing-posting "*"), :payee "", :descr description, :reference reference
+          {:date posting-date, :flag (:flag existing-posting "*"), :payee ""
+           :descr (:descr existing-posting description), :reference reference
            :postings [{:account authed-account, :amount amount, :currency "EUR"}
                       {:account posted-account}]})]
     (if posted-now?
