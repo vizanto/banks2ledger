@@ -325,10 +325,17 @@
 ;; Parse a line of CSV into a map with :date :ref :amount :descr
 (defn parse-csv-entry [params string]
   (let [cols (split-csv-line string (get-arg params :csv-field-separator))
-        ref-col (get-arg params :ref-col)]
+        ref-col (get-arg params :ref-col)
+        account (get-arg params :account)
+        currency (get-arg params :currency)
+        amount (convert-amount (nth cols (get-arg params :amount-col)))]
     {:date (convert-date params (nth cols (get-arg params :date-col)))
-     :ref (if (< ref-col 0) nil (unquote-string (nth cols ref-col)))
-     :amount (convert-amount (nth cols (get-arg params :amount-col)))
+     :reference (if (< ref-col 0) nil (unquote-string (nth cols ref-col)))
+     :postings
+     (if (= \- (first amount))
+       [{:account :uncategorized :currency currency :amount (subs amount 1)} {:account account}]
+      ;else
+       [{:account account :currency currency :amount amount} {:account :uncategorized}])
      :descr (unquote-string (get-col cols (get-arg params :descr-col)))}))
 
 ;; Drop the configured number of header and trailer lines
@@ -345,6 +352,14 @@
        (map clojure.string/trim-newline)
        (map (partial parse-csv-entry params))))
 
+(defn decide-all-accounts [acc-maps payee postings]
+  (let [main-account (->> postings (map :account) (remove #(= % :uncategorized)) first)]
+    (for [{:keys [account] :as entry} postings]
+      (if (= :uncategorized account)
+        (assoc entry :account (decide-account acc-maps payee main-account))
+       ;else
+        entry))))
+
 ;; format and print a beancount entry to *out*
 (defn print-beancount-entry [acc-maps
                              {:keys [date flag payee descr reference metas postings]}]
@@ -353,34 +368,32 @@
   (println)
   (doseq [[k v] metas]
     (printf "  %-58s %24s\n" (str k ":") v)) ; conversion-fee: 3 EUR, etc
-  (doseq [{:keys [amount currency account commented]} postings]
-    (printf (if-not commented "  %-58s" #_else " ;%-58s")
-            (if (= :uncategorized account)
-              (decide-account acc-maps payee
-                              (->> postings (filter #(-> % :account (= :uncategorized) not))
-                                   first :account))
-            ;else
-              account))
+  (doseq [{:keys [amount currency account commented]}
+          (decide-all-accounts acc-maps (or payee descr "") postings)]
+    (printf (if-not commented "  %-58s" #_else " ;%-58s") account)
     (when amount
       (printf " %20s" amount)
       (when currency (printf " %s" currency)))
     (println)))
 
 ;; format and print a ledger entry to *out*
-(defn print-ledger-entry [params acc-maps
-                          {:keys [date ref amount descr] :as cm}]
-  (let [account (get-arg params :account)
-        counter-acc (decide-account acc-maps descr account)
-        currency (get-arg params :currency)]
-  (printf "%s " date)
-  (if (and ref (not (empty? ref))) (printf "(%s) " ref))
-  (println descr)
-  (if (= \- (first amount))
-    (do (printf "    %-38s%s %s\n" counter-acc currency (subs amount 1))
-        (printf "    %s\n" account))
-    (do (printf "    %-38s%s %s\n" account currency amount)
-        (printf "    %s\n" counter-acc)))
-  (println)))
+(defn print-ledger-entry [acc-maps
+                          {:keys [date payee descr reference postings] :as cm}]
+  (let [descr (clojure.string/trim (str payee " " descr))]
+    (printf "%s " date)
+    (if (and reference (not (empty? reference))) (printf "(%s) " reference))
+    (println descr)
+
+    (doseq [{:keys [amount currency account commented]}
+            (decide-all-accounts acc-maps descr postings)]
+
+      (if amount
+        (do (printf (if-not commented "    %-38s" #_else "   ;%-38s") account)
+            (printf "%s %s" currency amount))
+       ;else
+        (printf (if-not commented "    %s" #_else "   ;%s") account))
+      (println))
+    (println)))
 
 ;; Convert CSV of bank account transactions to corresponding ledger entries
 (defn -main [& args]
@@ -388,5 +401,5 @@
         acc-maps (parse-ledger (get-arg params :ledger-file))
         csv-maps (parse-csv params)]
     (doseq [cm csv-maps]
-      (print-ledger-entry params acc-maps cm))
+      (print-ledger-entry acc-maps cm))
     (flush)))
