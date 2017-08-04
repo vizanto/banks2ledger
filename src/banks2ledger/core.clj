@@ -97,10 +97,10 @@
         p_tab (p_table acc-maps tokens)]
     (remove #(str/includes? (second %) account) p_tab)))
 
-(defn decide-account [acc-maps descr account]
+(defn decide-account [acc-maps descr account unknown-account]
   (let [accs (account-for-descr acc-maps descr account)]
-    (cond (empty? accs) "Unknown"
-          (= (first (first accs)) (first (second accs))) "Unknown"
+    (cond (empty? accs) unknown-account
+          (= (first (first accs)) (first (second accs))) unknown-account
           :else (second (first accs)))))
 
 ;; Science up to this point. From here, only machinery.
@@ -389,11 +389,11 @@
       "AMEX-JSON"
       (mapcat #(amex-nl/parse-json-transaction account %) (:transactions json)))))
 
-(defn decide-all-accounts [acc-maps payee postings]
+(defn decide-all-accounts [acc-maps payee postings unknown-account]
   (let [main-account (->> postings (map :account) (remove #(= % :uncategorized)) first)]
     (for [{:keys [account] :as entry} postings]
       (if (= :uncategorized account)
-        (assoc entry :account (decide-account acc-maps payee main-account))
+        (assoc entry :account (decide-account acc-maps payee main-account unknown-account))
        ;else
         entry))))
 
@@ -410,7 +410,7 @@
   (doseq [[k v] metas]
     (printf (str "  %s %" (not0 (- 75 (count k))) "s\n") (str k ":") v))
   (doseq [{:keys [amount currency account commented]}
-          (decide-all-accounts acc-maps (str payee " " descr) postings)]
+          (decide-all-accounts acc-maps (str payee " " descr) postings "Expenses:Uncategorized")]
     (printf (if-not commented "  %s" #_else " ;%s") account)
     (when amount
       (printf (str " %" (not0 (- 72 (count account))) "s") amount)
@@ -426,7 +426,7 @@
     (println descr)
 
     (doseq [{:keys [amount currency account commented]}
-            (decide-all-accounts acc-maps descr postings)]
+            (decide-all-accounts acc-maps descr postings "Unknown")]
 
       (if amount
         (do (printf (if-not commented "    %-38s" #_else "   ;%-38s") account)
