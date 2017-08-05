@@ -98,12 +98,28 @@
     (remove #(str/includes? (second %) account) p_tab)))
 
 (defn decide-account [acc-maps descr account unknown-account]
-  (let [accs (account-for-descr acc-maps descr account)]
+  (let [accs (account-for-descr (first acc-maps) descr account)]
+    ;(prn :decide-account accs descr account (= (first (first accs)) (first (second accs))) '= (first (first accs)) (first (second accs)))
     (cond (empty? accs) unknown-account
-          (= (first (first accs)) (first (second accs))) unknown-account
+          ; See if there's a match overall, or try again with the next token-table
+          (= (first (first accs)) (first (second accs)))
+          (or (some-> (next acc-maps) (decide-account descr account unknown-account))
+              ; No sub-account match found
+              unknown-account)
           :else (second (first accs)))))
 
 ;; Science up to this point. From here, only machinery.
+
+;; Create a token counter table from existing ledger entries
+(defn ledger->acc-maps [entries]
+  (reduce toktab-update {} entries))
+
+;; Create token counter tables for each src-account sub-account
+(defn ledger->sub-acc-maps [src-account ledger-entries]
+  (->> ledger-entries
+   (group-by (fn [e] (->> e :accs (filter #(str/includes? % src-account)) first)))
+   (map (fn [[k v]] [k (reduce toktab-update {} v)]))
+   (into {})))
 
 ;; Parse a ledger entry from string to acc-map
 (defn parse-ledger-entry [entry]
@@ -120,13 +136,12 @@
 (defn beancount-transaction? [entry]
   (re-matches #"(?s)[-0-9]{10}\s+(?:[!*]|txn)\s.+" entry))
 
-;; Read and parse a ledger file; return acc-maps
+;; Read and parse a ledger file; return tokenized entries
 (defn parse-ledger [filename]
   (->> (clojure.string/split (slurp filename) #"\n\n")
-       (map clojure.string/trim) ;; remove odd newlines
-       (filter #(> (count %) 0))
-       (map parse-ledger-entry)
-       (reduce toktab-update {})))
+       (map str/trim) ;; remove odd newlines
+       (remove empty?)
+       (map parse-ledger-entry)))
 
 (def beancount-transaction-re
   #"([-0-9]{10})\s+([!*]|txn)\s+(?:(?:\"([^\"]*?)\"\s+)?\"([^\"]*)\")?(.*)")
@@ -151,16 +166,13 @@
     {:date date :toks toks :accs accs :flag flag :descr descr
      :tags tags :links links :reference (first links)}))
 
-;; Read and parse a beancount file; return acc-maps
+;; Read and parse a beancount file; return tokenized entries
 (defn parse-beancount [filename]
-  (let [entries
-        (->> (str/split (slurp filename) #"\n(\n|(?=[0-9]))")
-             (map str/trim) ;; remove odd newlines
-             (filter #(> (count %) 0))
-             (filter beancount-transaction?)
-             (map parse-beancount-entry))]
-    ; Return toktab and map of entries by unique-reference
-    [(reduce toktab-update {} entries), (group-by :reference entries)]))
+  (->> (str/split (slurp filename) #"\n(\n|(?=[0-9]))")
+       (map str/trim) ;; remove odd newlines
+       (remove empty?)
+       (filter beancount-transaction?)
+       (map parse-beancount-entry)))
 
 ;; command line args spec
 (def cl-args-spec
@@ -391,19 +403,31 @@
       "AMEX-JSON"
       (mapcat #(amex-nl/parse-json-transaction existing-txn account %) (:transactions json)))))
 
-(defn decide-all-accounts [acc-maps payee postings unknown-account]
-  (let [main-account (->> postings (map :account) (remove #(= % :uncategorized)) first)]
-    (for [{:keys [account] :as entry} postings]
-      (if (= :uncategorized account)
-        (assoc entry :account (decide-account acc-maps payee main-account unknown-account))
-       ;else
-        entry))))
+(defn postings->main-account [postings]
+  (->> postings (map :account) (remove #(= % :uncategorized)) first))
+
+(defn decide-all-accounts [src-account acc-maps sub-acc-maps unknown-account payee postings]
+  (if-not (some #(-> % :account (= :uncategorized)) postings)
+    postings
+   ;else
+    (let [main-account (postings->main-account postings)]
+      (for [{:keys [account] :as entry} postings]
+        (if (= :uncategorized account)
+          (assoc entry :account (decide-account [(sub-acc-maps main-account) acc-maps]
+                                                payee src-account unknown-account))
+         ;else
+          entry)))))
+
+;; Concat 2 strings with a space in between
+(defn- str+ [payee descr]
+  (cond (empty? payee) (or descr "")
+        (empty? descr) (or payee "")
+        :else (str payee " " descr)))
 
 (defn- not0 [n] (if (>= 0 n) 1 #_else n))
 
 ;; format and print a beancount entry to *out*
-(defn print-beancount-entry [acc-maps
-                             {:keys [date flag payee descr reference metas postings]}]
+(defn print-beancount-entry [{:keys [date flag payee descr reference metas postings]}]
   (printf "\n%s %s \"%s\" \"%s\"" date (or flag "*") (str payee) (str descr))
   (when-not (empty? reference)
     (printf (str" %" (not0 (- 60 (count payee) (count descr))) "s")
@@ -411,8 +435,7 @@
   (println)
   (doseq [[k v] metas]
     (printf (str "  %s %" (not0 (- 75 (count k))) "s\n") (str k ":") v))
-  (doseq [{:keys [amount currency account commented]}
-          (decide-all-accounts acc-maps (str payee " " descr) postings "Expenses:Uncategorized")]
+  (doseq [{:keys [amount currency account commented]} postings]
     (printf (if-not commented "  %s" #_else " ;%s") account)
     (when amount
       (printf (str " %" (not0 (- 72 (count account))) "s") amount)
@@ -420,15 +443,13 @@
     (println)))
 
 ;; format and print a ledger entry to *out*
-(defn print-ledger-entry [acc-maps
-                          {:keys [date payee descr reference postings] :as cm}]
-  (let [descr (clojure.string/trim (str payee " " descr))]
+(defn print-ledger-entry [{:keys [date payee descr reference postings] :as cm}]
+  (let [descr (str+ payee descr)]
     (printf "%s " date)
     (if (and reference (not (empty? reference))) (printf "(%s) " reference))
     (println descr)
 
-    (doseq [{:keys [amount currency account commented]}
-            (decide-all-accounts acc-maps descr postings "Unknown")]
+    (doseq [{:keys [amount currency account commented]} postings]
 
       (if amount
         (do (printf (if-not commented "    %-38s" #_else "   ;%-38s") account)
@@ -446,16 +467,25 @@
     "AMEX-JSON"
     (parse-json params existing-txn)))
 
+(defn do-entries [f src-account existing-ledger unknown-account entries]
+  (let [acc-maps     (ledger->acc-maps existing-ledger)
+        sub-acc-maps (ledger->sub-acc-maps src-account existing-ledger)]
+    (doseq [{:keys [payee descr] :as entry} entries]
+      (f (->> entry :postings
+              (decide-all-accounts src-account acc-maps sub-acc-maps unknown-account (str+ payee descr))
+              (assoc entry :postings))))))
+
 ;; Convert CSV of bank account transactions to corresponding ledger entries
 (defn -main [& args]
   (let [params      (parse-args cl-args-spec args)
+        src-account (get-arg params :account)
         ledger-file (get-arg params :ledger-file)]
     (if (str/ends-with? ledger-file ".beancount")
-      (let [[acc-maps existing-txn] (parse-beancount ledger-file)]
-        (doseq [entry (read-file params existing-txn)]
-          (print-beancount-entry acc-maps entry)))
+      (let [ledger-entries (parse-beancount ledger-file)]
+        (do-entries print-beancount-entry src-account ledger-entries "Expenses:Uncategorized"
+                    (read-file params (group-by :reference ledger-entries))))
      ;else
-      (let [acc-maps (parse-ledger ledger-file)]
-        (doseq [entry (read-file params nil)]
-          (print-ledger-entry acc-maps entry))))
+      (let [ledger-entries (parse-ledger ledger-file)]
+        (do-entries print-ledger-entry src-account ledger-entries "Unknown"
+                    (read-file params {}))))
     (flush)))
