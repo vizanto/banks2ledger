@@ -17,7 +17,7 @@
 
 
 (defn create-postings [liability-account-str,
-                       {:keys [amount reference existing-txns date posting-date payee card-account
+                       {:keys [amount reference date posting-date payee card-account
                                description charge-amount charge-currency conversion-fee]}]
   {:pre [amount date
          (or (nil? charge-amount)  (pos? charge-amount))
@@ -56,14 +56,11 @@
         to-transfer
         {:account :uncategorized, :amount amount, :currency "EUR"}
 
-        existing-transaction
-        (some->> existing-txns (filter #(-> % :date (= date))) first)
-
         transaction
         {:date      date
-         :flag      (:flag existing-transaction "!")
+         :flag      "!"
          :payee     payee
-         :descr     (:descr existing-transaction (when posted-now? description))
+         :descr     (when posted-now? description)
          :reference reference
          :metas     (when forex-posting
                       {"conversion-fee" (str conversion-fee " EUR")
@@ -74,14 +71,9 @@
                       forex-posting
                       fee-posting])}
 
-        existing-posting
-        (when-not posted-now?
-          (some->> existing-txns (filter #(-> % :date (= posting-date))) first))
-
         posting
         (when-not posted-now?
-          {:date posting-date, :flag (:flag existing-posting "*"), :payee ""
-           :descr (:descr existing-posting description), :reference reference
+          {:date posting-date, :flag "*", :payee "", :descr description, :reference reference
            :postings [{:account authed-account, :amount amount, :currency "EUR"}
                       {:account posted-account}]})]
     (if posted-now?
@@ -137,14 +129,13 @@
 ;;;
 
 (defn parse-json-transaction
-  [existing-txns, liability-account-str,
+  [liability-account-str,
    {:keys [description amount first_name foreign_details reference_id type charge_date identifier
            statement_end_date last_name embossed_name supplementary_index post_date]}]
   {:pre [(-> amount decimal?)]}
   (create-postings liability-account-str,
    {:amount          amount
     :reference       reference_id
-    :existing-txns   (get existing-txns reference_id)
     :date            charge_date
     :posting-date    post_date
     :card-account    (clojure.string/capitalize first_name)

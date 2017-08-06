@@ -270,6 +270,29 @@
     args-spec
     (parse-arg args-spec (first args) (rest args))))
 
+(defn assoc-non-nil-from
+  "Lookup key in map2 and associate its value to map.
+   Leaves map2 as is when value is nil."
+  [map map2 key]
+  (let [val (get map2 key)]
+    (if (nil? val) map #_else (assoc map key val))))
+
+;; Adjust entry with information from an existing entry in parsed ledger
+(defn update-existing-entry [existing-entry new-entry]
+  (-> new-entry
+   (assoc-non-nil-from existing-entry :flag)
+   (assoc-non-nil-from existing-entry :descr)))
+
+;; Adjust entries with information from parsed beancount/ledger
+(defn update-from-existing-txn [existing-txns entries]
+  (for [{:keys [date reference] :as new-entry} entries
+        :let [existing-entries (existing-txns reference)
+              [existing-entry] (filter #(= (:date %) date) existing-entries)]]
+    (if-not existing-entry
+      new-entry
+     ;else
+      (update-existing-entry existing-entry new-entry))))
+
 ;; Convert date field from CSV format to Ledger entry format
 (defn convert-date [args-spec datestr]
   (.format
@@ -385,12 +408,13 @@
           (- (count lines) (get-arg params :csv-skip-trailer-lines))))
 
 ;; Parse input CSV into a list of maps
-(defn parse-csv [params]
+(defn parse-csv [params existing-txn]
   (->> (-> (slurp (get-arg params :csv-file))
            (str/split #"\n")
            (drop-lines params))
        (map str/trim-newline)
-       (mapcat #(parse-csv-entry params %))))
+       (mapcat #(parse-csv-entry params %))
+       (update-from-existing-txn existing-txn)))
 
 ;; Parse input JSON into a list of maps
 (defn parse-json [params existing-txn]
@@ -399,9 +423,10 @@
                   (-> (get-arg params :csv-file)
                       (io/reader)
                       (json/parse-stream true)))]
-    (case (get-arg params :file-kind)
-      "AMEX-JSON"
-      (mapcat #(amex-nl/parse-json-transaction existing-txn account %) (:transactions json)))))
+    (->> (case (get-arg params :file-kind)
+           "AMEX-JSON"
+           (mapcat #(amex-nl/parse-json-transaction account %) (:transactions json)))
+         (update-from-existing-txn existing-txn))))
 
 (defn postings->main-account [postings]
   (->> postings (map :account) (remove #(= % :uncategorized)) first))
@@ -462,7 +487,7 @@
 (defn read-file [params existing-txn]
   (case (get-arg params :file-kind)
     ("CSV", "AMEX-CSV")
-    (parse-csv params)
+    (parse-csv params existing-txn)
 
     "AMEX-JSON"
     (parse-json params existing-txn)))
