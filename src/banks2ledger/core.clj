@@ -100,13 +100,14 @@
 (defn decide-account [acc-maps descr account unknown-account]
   (let [accs (account-for-descr (first acc-maps) descr account)]
     ;(prn :decide-account accs descr account (= (first (first accs)) (first (second accs))) '= (first (first accs)) (first (second accs)))
-    (cond (empty? accs) unknown-account
-          ; See if there's a match overall, or try again with the next token-table
-          (= (first (first accs)) (first (second accs)))
-          (or (some-> (next acc-maps) (decide-account descr account unknown-account))
-              ; No sub-account match found
-              unknown-account)
-          :else (second (first accs)))))
+    (if (or (empty? accs) ; No match
+            (= (first (first accs)) (first (second accs)))) ; First 2 matches have equal weight
+      ; Try again with the next token-table, if available, or return unknown-account
+      (or (some-> (next acc-maps) (decide-account descr account unknown-account))
+          ; No sub-account match found
+          unknown-account)
+     ;else, we have a winner!
+      (second (first accs)))))
 
 ;; Science up to this point. From here, only machinery.
 
