@@ -164,7 +164,7 @@
                    (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
                    (map (partial clip-string " ")))]
     {:date date :toks toks :accs accs :flag flag :descr descr
-     :tags tags :links links :reference (first links)}))
+     :tags tags :links links}))
 
 ;; Read and parse a beancount file; return tokenized entries
 (defn parse-beancount [filename]
@@ -281,6 +281,7 @@
 (defn update-existing-entry [existing-entry new-entry]
   (-> new-entry
    (assoc-non-nil-from existing-entry :flag)
+   (assoc-non-nil-from existing-entry :links)
    (assoc-non-nil-from existing-entry :descr)))
 
 ;; Adjust entries with information from parsed beancount/ledger
@@ -452,11 +453,13 @@
 (defn- not0 [n] (if (>= 0 n) 1 #_else n))
 
 ;; format and print a beancount entry to *out*
-(defn print-beancount-entry [{:keys [date flag payee descr reference metas postings]}]
+(defn print-beancount-entry [{:keys [date flag payee descr reference links metas postings]}]
   (printf "\n%s %s \"%s\" \"%s\"" date (or flag "*") (str payee) (str descr))
   (when-not (empty? reference)
     (printf (str" %" (not0 (- 60 (count payee) (count descr))) "s")
             (str "^" reference)))
+  (doseq [link links]
+    (when-not (= link reference) (printf " ^%s" link)))
   (println)
   (doseq [[k v] metas]
     (printf (str "  %s %" (not0 (- 75 (count k))) "s\n") (str k ":") v))
@@ -500,6 +503,11 @@
               (decide-all-accounts src-account acc-maps sub-acc-maps unknown-account (str+ payee descr))
               (assoc entry :postings))))))
 
+(defn group-by-links [entries]
+  (->> entries
+   (mapcat #(for [l (:links %)] (assoc % :link l)))
+   (group-by :link)))
+
 ;; Convert CSV of bank account transactions to corresponding ledger entries
 (defn -main [& args]
   (let [params      (parse-args cl-args-spec args)
@@ -508,7 +516,7 @@
     (if (str/ends-with? ledger-file ".beancount")
       (let [ledger-entries (parse-beancount ledger-file)]
         (do-entries print-beancount-entry src-account ledger-entries "Expenses:Uncategorized"
-                    (read-file params (group-by :reference ledger-entries))))
+                    (read-file params (group-by-links ledger-entries))))
      ;else
       (let [ledger-entries (parse-ledger ledger-file)]
         (do-entries print-ledger-entry src-account ledger-entries "Unknown"
