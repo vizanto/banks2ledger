@@ -277,22 +277,34 @@
   (let [val (get map2 key)]
     (if (nil? val) map #_else (assoc map key val))))
 
+;; Adjust :postings in new-entry with information from existing parsed ledger
+(defn update-uncategorized [{:keys [postings] :as new-entry} src-account existing-entry]
+  (if-not (some #(-> % :account (= :uncategorized)) postings)
+    new-entry
+   ;else
+    (assoc new-entry :postings
+     (for [p postings]
+      (if-not (= (:account p) :uncategorized) p
+       #_else (assoc p :account
+               (first (remove #(str/includes? % src-account) (:accs existing-entry)))))))))
+
 ;; Adjust entry with information from an existing entry in parsed ledger
-(defn update-existing-entry [existing-entry new-entry]
+(defn update-from-existing-entry [new-entry src-account existing-entry]
   (-> new-entry
+   (update-uncategorized src-account existing-entry)
    (assoc-non-nil-from existing-entry :flag)
    (assoc-non-nil-from existing-entry :links)
    (assoc-non-nil-from existing-entry :descr)))
 
 ;; Adjust entries with information from parsed beancount/ledger
-(defn update-from-existing-txn [existing-txns entries]
+(defn update-from-existing-txn [src-account existing-txns entries]
   (for [{:keys [date reference] :as new-entry} entries
         :let [existing-entries (existing-txns reference)
               [existing-entry] (filter #(= (:date %) date) existing-entries)]]
     (if-not existing-entry
       new-entry
      ;else
-      (update-existing-entry existing-entry new-entry))))
+      (update-from-existing-entry new-entry src-account existing-entry))))
 
 ;; Convert date field from CSV format to Ledger entry format
 (defn convert-date [args-spec datestr]
@@ -415,7 +427,7 @@
            (drop-lines params))
        (map str/trim-newline)
        (mapcat #(parse-csv-entry params %))
-       (update-from-existing-txn existing-txn)))
+       (update-from-existing-txn (get-arg params :account) existing-txn)))
 
 ;; Parse input JSON into a list of maps
 (defn parse-json [params existing-txn]
@@ -427,7 +439,7 @@
     (->> (case (get-arg params :file-kind)
            "AMEX-JSON"
            (mapcat #(amex-nl/parse-json-transaction account %) (:transactions json)))
-         (update-from-existing-txn existing-txn))))
+         (update-from-existing-txn account existing-txn))))
 
 (defn postings->main-account [postings]
   (->> postings (map :account) (remove #(= % :uncategorized)) first))
