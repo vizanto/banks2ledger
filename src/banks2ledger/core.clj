@@ -452,7 +452,7 @@
     (let [main-account (postings->main-account postings)]
       (for [{:keys [account] :as entry} postings]
         (if (= :uncategorized account)
-          (assoc entry :account (decide-account [(sub-acc-maps main-account) acc-maps]
+          (assoc entry :account (decide-account [acc-maps (sub-acc-maps main-account)]
                                                 payee src-account unknown-account))
          ;else
           entry)))))
