@@ -158,7 +158,7 @@
         [_ date flag payee descr extra] (re-matches beancount-transaction-re first-line)
         tags  (some->> extra (re-seq beancount-tags-re)  (map #(subs % 1)))
         links (some->> extra (re-seq beancount-links-re) (map #(subs % 1)))
-        toks  (concat (tokenize (or payee "")) (tokenize (or descr "")))
+        toks  (when-not (= "!" flag) (concat (tokenize (or payee "")) (tokenize (or descr ""))))
         accs  (->> rest-lines
                    (map str/trim)
                    (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
