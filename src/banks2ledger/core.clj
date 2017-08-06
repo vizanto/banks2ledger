@@ -285,7 +285,7 @@
    ;else
     (assoc new-entry :postings
      (for [p postings]
-      (if-not (= (:account p) :uncategorized) p
+      (if-not (and (= (:account p) :uncategorized) (not= (:flag existing-entry) "!")) p
        #_else (assoc p :account
                (first (remove #(str/includes? % src-account) (:accs existing-entry)))))))))
 
