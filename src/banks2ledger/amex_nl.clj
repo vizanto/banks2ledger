@@ -1,6 +1,7 @@
 (ns banks2ledger.amex-nl
   (:require [clojure.string :as str]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [banks2ledger.util :refer (abs)]))
 
 ;;
 ;; American Express
@@ -8,8 +9,6 @@
 
 (def conversion-account-str "Expenses:Bank-fees:NL:AMEX:Conversion")
 (def internal-payees #{"HARTELIJK BEDANKT VOOR UW BETALING"})
-
-(defn abs [n] (if (neg? n) (- n) #_else n))
 
 ;;;
 ;;; Beancount/ledger posting data

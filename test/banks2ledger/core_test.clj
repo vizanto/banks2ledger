@@ -129,12 +129,12 @@
 
 (deftest test-convert-amount
   (testing "convert-amount"
-    (is (= (convert-amount "egy azaz 1 krumpli") "1.00"))
-    (is (= (convert-amount "-8,00 kr") "-8.00"))
-    (is (= (convert-amount "-123,45 kr") "-123.45"))
-    (is (= (convert-amount "garbage +123.5 kr") "123.50"))
-    (is (= (convert-amount "12345") "12,345.00"))
-    (is (= (convert-amount "-1234567") "-1,234,567.00"))))
+    (is (= (convert-amount "egy azaz 1 krumpli") 1.00M))
+    (is (= (convert-amount "-8,00 kr") -8.00M))
+    (is (= (convert-amount "-123,45 kr") -123.45M))
+    (is (= (convert-amount "garbage +123.5 kr") 123.50M))
+    (is (= (convert-amount "12345") 12345.00M))
+    (is (= (convert-amount "-1234567") -1234567.00M))))
 
 (deftest test-unquote-string
   (testing "unquote-string"

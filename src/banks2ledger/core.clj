@@ -1,5 +1,6 @@
 (ns banks2ledger.core
   (:require [banks2ledger.amex-nl :as amex-nl]
+            [banks2ledger.util :refer (abs)]
             [clojure.string :as str]
             [clojure.java.io :as io]
             [cheshire.core :as json]
@@ -230,6 +231,22 @@
    {:opt "-bt" :value -1 :conv-fun #(Integer. (str %))
     :help "Beancount Tags (comma or space seperated) column index (zero-based)"}
 
+   :foreign-amount-col
+   {:opt "-fa" :value -1 :conv-fun #(Integer. (str %))
+    :help "Foreign transaction amount column index (zero-based)"}
+
+   :foreign-currency-col
+   {:opt "-fc" :value -1 :conv-fun #(Integer. (str %))
+    :help "Foreign currency column index (zero-based)"}
+
+   :foreign-conversion-col
+   {:opt "-ff" :value -1 :conv-fun #(Integer. (str %))
+    :help "Foreign currency conversion-fee column index (zero-based)"}
+
+   :forex-fees-account
+   {:opt "-ffa" :value "Expenses:Bank-fees:Forex"
+    :help "Expense account for foreign transaction fees"}
+
    :amount-col
    {:opt "-m" :value 2 :conv-fun #(Integer. (str %))
     :help "Amount column index (zero-based)"}
@@ -327,7 +344,7 @@
    (.parse (SimpleDateFormat. (get-arg args-spec :date-format))
            datestr)))
 
-;; Convert amount string - note the return value is still a string!
+;; Convert amount string to BigDecimal
 ;; - strip anything that does not belong to the number
 ;; - change decimal comma to dot
 (defn convert-amount [^String string]
@@ -335,8 +352,7 @@
    (-> (re-find #"-?\d[\d ]*[,\.]?\d*" string)
        (str/replace #"," ".")
        (.replace " " "")
-       (BigDecimal.))
-   (format "%,.2f")))
+       (BigDecimal.))))
 
 ;; Remove quotes from start & end of the string, if both present
 (defn unquote-string [str]
@@ -407,31 +423,48 @@
         spec-list (split-by-indices colspec delim-ixs)]
     (get-col-1 cols spec-list)))
 
+(defn col-or-nil [params cols key]
+  (when-let [n (get-arg params key)]
+    (when (>= n 0)
+      (let [v (-> (nth cols n) unquote-string str/trim)]
+        (when-not (empty? v) v)))))
+
+(defn row->postings [params cols amount]
+  (let [account (get-arg params :account)
+        currency (get-arg params :currency)
+        forex-fees-account (get-arg params :forex-fees-account)
+        foreign-amount (col-or-nil params cols :foreign-amount-col)
+        foreign-currency (col-or-nil params cols :foreign-currency-col)
+        foreign-conversion (col-or-nil params cols :foreign-conversion-col)]
+    (if-not foreign-amount
+      (if (neg? amount)
+        [{:account :uncategorized :currency currency :amount (- amount)} {:account account}]
+       ;else
+        [{:account account :currency currency :amount amount} {:account :uncategorized}])
+     ;else
+      (let [foreign-conversion (BigDecimal. (str (or foreign-conversion "0")))]
+        [{:account account :currency currency :amount amount}
+         {:account forex-fees-account :currency currency :amount foreign-conversion}
+         {:account :uncategorized
+          :currency currency
+          :amount (str foreign-amount " " foreign-currency
+                       " @@ " (-> (- amount) (- (or foreign-conversion 0)) abs))}]))))
+
 ;; Parse a line of CSV into a map with :date :ref :amount :descr
 (defn parse-csv-entry [params string]
   (let [cols (split-csv-line string (get-arg params :csv-field-separator))
-        ref-col (get-arg params :ref-col)
-        payee-col (get-arg params :payee-col)
-        links-col (get-arg params :links-col)
-        tags-col (get-arg params :tags-col)
-        account (get-arg params :account)
-        currency (get-arg params :currency)
         amount (convert-amount (nth cols (get-arg params :amount-col)))]
     (case (get-arg params :file-kind)
       "AMEX-CSV"
-      (amex-nl/parse-csv-columns account cols)
+      (amex-nl/parse-csv-columns (get-arg params :account) cols)
 
       "CSV"
       [{:date (convert-date params (nth cols (get-arg params :date-col)))
-        :reference (if (< ref-col 0) nil (unquote-string (nth cols ref-col)))
-        :postings
-        (if (= \- (first amount))
-          [{:account :uncategorized :currency currency :amount (subs amount 1)} {:account account}]
-         ;else
-          [{:account account :currency currency :amount amount} {:account :uncategorized}])
-        :payee (when (>= payee-col 0) (unquote-string (nth cols payee-col)))
-        :links (when (>= links-col 0) (-> (unquote-string (nth cols links-col)) (str/split #"\s*,\s*")))
-        :tags  (when (>= tags-col  0) (-> (unquote-string (nth cols  tags-col)) (str/split #"\s*,\s*")))
+        :reference (col-or-nil params cols :ref-col)
+        :postings (row->postings params cols (BigDecimal. (str amount)))
+        :payee (col-or-nil params cols :payee-col)
+        :links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))
+        :tags  (some-> (col-or-nil params cols :tags-col) (str/split #"\s*,\s*"))
         :descr (unquote-string (get-col cols (get-arg params :descr-col)))}])))
 
 ;; Drop the configured number of header and trailer lines
@@ -461,14 +494,15 @@
            (mapcat #(amex-nl/parse-json-transaction account %) (:transactions json)))
          (update-from-existing-txn account existing-txn))))
 
-(defn postings->main-account [postings]
-  (->> postings (map :account) (remove #(= % :uncategorized)) first))
+(defn postings->main-account [non-main-accounts postings]
+  (->> postings (map :account) (remove non-main-accounts) first))
 
-(defn decide-all-accounts [src-account acc-maps sub-acc-maps unknown-account payee postings]
+(defn decide-all-accounts [src-account acc-maps sub-acc-maps unknown-account non-main-accounts
+                           payee postings]
   (if-not (some #(-> % :account (= :uncategorized)) postings)
     postings
    ;else
-    (let [main-account (postings->main-account postings)]
+    (let [main-account (postings->main-account non-main-accounts postings)]
       (for [{:keys [account] :as entry} postings]
         (if (= :uncategorized account)
           (assoc entry :account (decide-account [acc-maps (sub-acc-maps main-account)]
@@ -513,7 +547,7 @@
 
       (if amount
         (do (printf (if-not commented "    %-38s" #_else "   ;%-38s") account)
-            (printf "%s %s" currency amount))
+            (printf "%s %,.2f" currency amount))
        ;else
         (printf (if-not commented "    %s" #_else "   ;%s") account))
       (println))
@@ -527,12 +561,15 @@
     "AMEX-JSON"
     (parse-json params existing-txn)))
 
-(defn do-entries [f src-account existing-ledger unknown-account entries]
+(defn do-entries [f src-account existing-ledger unknown-account non-main-accounts entries]
   (let [acc-maps     (ledger->acc-maps existing-ledger)
-        sub-acc-maps (ledger->sub-acc-maps src-account existing-ledger)]
+        acc-maps     (apply dissoc acc-maps non-main-accounts)
+        sub-acc-maps (ledger->sub-acc-maps src-account existing-ledger)
+        sub-acc-maps (apply dissoc sub-acc-maps non-main-accounts)]
     (doseq [{:keys [payee descr] :as entry} entries]
       (f (->> entry :postings
-              (decide-all-accounts src-account acc-maps sub-acc-maps unknown-account (str+ payee descr))
+              (decide-all-accounts src-account acc-maps sub-acc-maps unknown-account
+                                   non-main-accounts (str+ payee descr))
               (assoc entry :postings))))))
 
 (defn group-by-links [entries]
@@ -545,14 +582,16 @@
   (let [params      (parse-args cl-args-spec args)
         src-account (get-arg params :account)
         ledger-file (get-arg params :ledger-file)
-        params      (assoc params :format 
+        non-mains   #{:uncategorized (get-arg params :forex-fees-account)}
+        params      (assoc params :format
                            (if (str/ends-with? ledger-file ".beancount") :beancount :ledger))]
     (if (-> params :format (= :beancount))
       (let [ledger-entries (parse-beancount ledger-file)]
-        (do-entries print-beancount-entry src-account ledger-entries "Expenses:Uncategorized"
+        (do-entries print-beancount-entry src-account ledger-entries
+                    "Expenses:Uncategorized" non-mains
                     (read-file params (group-by-links ledger-entries))))
      ;else
       (let [ledger-entries (parse-ledger ledger-file)]
-        (do-entries print-ledger-entry src-account ledger-entries "Unknown"
+        (do-entries print-ledger-entry src-account ledger-entries "Unknown" non-mains
                     (read-file params {}))))
     (flush)))
