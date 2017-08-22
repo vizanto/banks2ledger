@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [cheshire.core :as json]
             [cheshire.parse :refer (*use-bigdecimals?*)])
+  (:import java.text.SimpleDateFormat)
   (:gen-class))
 
 ;; Bump account's token counter for token
@@ -322,8 +323,8 @@
 ;; Convert date field from CSV format to Ledger entry format
 (defn convert-date [args-spec datestr]
   (.format
-   (java.text.SimpleDateFormat. "yyyy/MM/dd")
-   (.parse (java.text.SimpleDateFormat. (get-arg args-spec :date-format))
+   (SimpleDateFormat. (if (-> args-spec :format (= :beancount)) "yyyy-MM-dd" #_else "yyyy/MM/dd"))
+   (.parse (SimpleDateFormat. (get-arg args-spec :date-format))
            datestr)))
 
 ;; Convert amount string - note the return value is still a string!
@@ -543,8 +544,10 @@
 (defn -main [& args]
   (let [params      (parse-args cl-args-spec args)
         src-account (get-arg params :account)
-        ledger-file (get-arg params :ledger-file)]
-    (if (str/ends-with? ledger-file ".beancount")
+        ledger-file (get-arg params :ledger-file)
+        params      (assoc params :format 
+                           (if (str/ends-with? ledger-file ".beancount") :beancount :ledger))]
+    (if (-> params :format (= :beancount))
       (let [ledger-entries (parse-beancount ledger-file)]
         (do-entries print-beancount-entry src-account ledger-entries "Expenses:Uncategorized"
                     (read-file params (group-by-links ledger-entries))))
