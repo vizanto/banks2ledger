@@ -217,6 +217,18 @@
    {:opt "-r" :value -1 :conv-fun #(Integer. (str %))
     :help "Payment reference column index (zero-based)"}
 
+   :payee-col
+   {:opt "-bp" :value -1 :conv-fun #(Integer. (str %))
+    :help "Beancount Payee column index (zero-based)"}
+
+   :links-col
+   {:opt "-bl" :value -1 :conv-fun #(Integer. (str %))
+    :help "Beancount Links (comma or space seperated) column index (zero-based)"}
+
+   :tags-col
+   {:opt "-bt" :value -1 :conv-fun #(Integer. (str %))
+    :help "Beancount Tags (comma or space seperated) column index (zero-based)"}
+
    :amount-col
    {:opt "-m" :value 2 :conv-fun #(Integer. (str %))
     :help "Amount column index (zero-based)"}
@@ -398,6 +410,9 @@
 (defn parse-csv-entry [params string]
   (let [cols (split-csv-line string (get-arg params :csv-field-separator))
         ref-col (get-arg params :ref-col)
+        payee-col (get-arg params :payee-col)
+        links-col (get-arg params :links-col)
+        tags-col (get-arg params :tags-col)
         account (get-arg params :account)
         currency (get-arg params :currency)
         amount (convert-amount (nth cols (get-arg params :amount-col)))]
@@ -413,6 +428,9 @@
           [{:account :uncategorized :currency currency :amount (subs amount 1)} {:account account}]
          ;else
           [{:account account :currency currency :amount amount} {:account :uncategorized}])
+        :payee (when (>= payee-col 0) (unquote-string (nth cols payee-col)))
+        :links (when (>= links-col 0) (-> (unquote-string (nth cols links-col)) (str/split #"\s*,\s*")))
+        :tags  (when (>= tags-col  0) (-> (unquote-string (nth cols  tags-col)) (str/split #"\s*,\s*")))
         :descr (unquote-string (get-col cols (get-arg params :descr-col)))}])))
 
 ;; Drop the configured number of header and trailer lines
