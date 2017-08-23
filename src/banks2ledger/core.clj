@@ -251,6 +251,10 @@
    {:opt "-m" :value 2 :conv-fun #(Integer. (str %))
     :help "Amount column index (zero-based)"}
 
+   :amount-positive
+   {:opt "-ap" :value false :conv-fun #(if (#{"true" "1" "yes"} %) true #_else false)
+    :help "Debit amounts are positive (default: false)"}
+
    :descr-col
    {:opt "-t" :value "%3"
     :help "Text (descriptor) column index specs (zero-based)"}})
@@ -432,6 +436,8 @@
 (defn row->postings [params cols amount]
   (let [account (get-arg params :account)
         currency (get-arg params :currency)
+        amount-positive (get-arg params :amount-positive)
+        amount (if amount-positive (- amount) #_else amount)
         forex-fees-account (get-arg params :forex-fees-account)
         foreign-amount (col-or-nil params cols :foreign-amount-col)
         foreign-currency (col-or-nil params cols :foreign-currency-col)
