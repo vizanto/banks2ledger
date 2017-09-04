@@ -526,7 +526,7 @@
 
 ;; format and print a beancount entry to *out*
 (defn print-beancount-entry [{:keys [date flag payee descr reference links metas postings]}]
-  (printf "\n%s %s \"%s\" \"%s\"" date (or flag "*") (str payee) (str descr))
+  (printf "\n%s %s \"%s\" \"%s\"" date (or flag "!") (str payee) (str descr))
   (when-not (empty? reference)
     (printf (str" %" (not0 (- 60 (count payee) (count descr))) "s")
             (str "^" reference)))
