@@ -465,13 +465,15 @@
       (amex-nl/parse-csv-columns (get-arg params :account) cols)
 
       "CSV"
-      [{:date (convert-date params (nth cols (get-arg params :date-col)))
-        :reference (col-or-nil params cols :ref-col)
-        :postings (row->postings params cols (BigDecimal. (str amount)))
-        :payee (col-or-nil params cols :payee-col)
-        :links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))
-        :tags  (some-> (col-or-nil params cols :tags-col) (str/split #"\s*,\s*"))
-        :descr (unquote-string (get-col cols (get-arg params :descr-col)))}])))
+      (let [links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))]
+        [{:date (convert-date params (nth cols (get-arg params :date-col)))
+          :flag "!"
+          :reference (or (col-or-nil params cols :ref-col) (first links))
+          :postings (row->postings params cols (BigDecimal. (str amount)))
+          :payee (col-or-nil params cols :payee-col)
+          :links links
+          :tags  (some-> (col-or-nil params cols :tags-col) (str/split #"\s*,\s*"))
+          :descr (unquote-string (get-col cols (get-arg params :descr-col)))}]))))
 
 ;; Drop the configured number of header and trailer lines
 (defn drop-lines [lines params]
