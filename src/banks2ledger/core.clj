@@ -318,10 +318,12 @@
     new-entry
    ;else
     (assoc new-entry :postings
-     (for [p postings]
-      (if-not (and (= (:account p) :uncategorized) (not= (:flag existing-entry) "!")) p
-       #_else (assoc p :account
-               (first (remove #(str/includes? % src-account) (:accs existing-entry)))))))))
+     (let [known-account-set (->> postings (map :account) (remove #{:uncategorized}) set)]
+       (for [p postings]
+        (if-not (and (= (:account p) :uncategorized) (not= (:flag existing-entry) "!")) p
+         #_else (assoc p :account
+                       (first (remove #(or (str/includes? % src-account) (known-account-set %))
+                                      (:accs existing-entry))))))))))
 
 ;; Adjust entry with information from an existing entry in parsed ledger
 (defn update-from-existing-entry [new-entry src-account existing-entry]
