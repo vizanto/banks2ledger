@@ -573,11 +573,16 @@
     "AMEX-JSON"
     (parse-json params existing-txn)))
 
+(defn dissoc-nested [m & keys]
+  (->> (apply dissoc m keys)
+       (map (fn [[k v]] [k (if (map? v) (apply dissoc-nested v keys) #_else v)]))
+       (into {})))
+
 (defn do-entries [f src-account existing-ledger unknown-account non-main-accounts entries]
   (let [acc-maps     (ledger->acc-maps existing-ledger)
-        acc-maps     (apply dissoc acc-maps non-main-accounts)
+        acc-maps     (apply dissoc-nested acc-maps non-main-accounts)
         sub-acc-maps (ledger->sub-acc-maps src-account existing-ledger)
-        sub-acc-maps (apply dissoc sub-acc-maps non-main-accounts)]
+        sub-acc-maps (apply dissoc-nested sub-acc-maps non-main-accounts)]
     (doseq [{:keys [payee descr] :as entry} entries]
       (f (->> entry :postings
               (decide-all-accounts src-account acc-maps sub-acc-maps unknown-account
