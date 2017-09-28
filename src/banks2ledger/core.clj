@@ -331,6 +331,7 @@
    (update-uncategorized src-account existing-entry)
    (assoc-non-nil-from existing-entry :flag)
    (assoc-non-nil-from existing-entry :links)
+   (assoc-non-nil-from existing-entry :tags)
    (assoc-non-nil-from existing-entry :descr)))
 
 ;; Adjust entries with information from parsed beancount/ledger
@@ -529,13 +530,14 @@
 (defn- not0 [n] (if (>= 0 n) 1 #_else n))
 
 ;; format and print a beancount entry to *out*
-(defn print-beancount-entry [{:keys [date flag payee descr reference links metas postings]}]
+(defn print-beancount-entry [{:keys [date flag payee descr reference links tags metas postings]}]
   (printf "\n%s %s \"%s\" \"%s\"" date (or flag "!") (str payee) (str descr))
   (when-not (empty? reference)
     (printf (str" %" (not0 (- 60 (count payee) (count descr))) "s")
             (str "^" reference)))
   (doseq [link links]
     (when-not (= link reference) (printf " ^%s" link)))
+  (doseq [tag tags] (printf " #%s" tag))
   (println)
   (doseq [[k v] metas]
     (printf (str "  %s %" (not0 (- 75 (count k))) "s\n") (str k ":") v))
