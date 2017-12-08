@@ -1,6 +1,7 @@
 (ns banks2ledger.core
   (:require [banks2ledger.amex-nl :as amex-nl]
             [banks2ledger.util :refer (abs)]
+            [custom.transforms :refer (apply-entry-transforms)]
             [clojure.string :as str]
             [clojure.java.io :as io]
             [cheshire.core :as json]
@@ -491,6 +492,7 @@
            (drop-lines params))
        (map str/trim-newline)
        (mapcat #(parse-csv-entry params %))
+       (map apply-entry-transforms)
        (update-from-existing-txn (get-arg params :account) existing-txn)))
 
 ;; Parse input JSON into a list of maps

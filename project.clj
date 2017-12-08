@@ -7,5 +7,6 @@
                  [cheshire "5.7.1"]]
   :global-vars {*warn-on-reflection* true}
   :main ^:skip-aot banks2ledger.core
+  :source-paths ["../banks2ledger-customizations" "src" "src/main/clojure"]
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
