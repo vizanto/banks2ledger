@@ -418,7 +418,7 @@
 ;; return whitespace-trimmed version.
 (defn format-colspec [cols colspec]
   (-> colspec
-      (str/replace #"\%(\d)*"
+      (str/replace #"\%(\d+)"
              #(unquote-string (nth cols (Integer. (str (second %1))))))
       (str/trim)))
 
