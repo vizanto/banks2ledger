@@ -254,7 +254,11 @@
 
    :amount-positive
    {:opt "-ap" :value false :conv-fun #(if (#{"true" "1" "yes"} %) true #_else false)
-    :help "Debit amounts are positive (default: false)"}
+    :help "Debit amounts are positive"}
+
+   :amount-credit
+   {:opt "-ac" :value nil :conv-fun #(when-not (empty? %) (Integer. (str %)))
+    :help "Debit / Credit column index (zero-based)"}
 
    :descr-col
    {:opt "-t" :value "%3"
@@ -362,6 +366,13 @@
        (.replace " " "")
        (BigDecimal.))))
 
+(defn debit-credit-amount [amount debit-credit-str]
+  (case (some-> debit-credit-str str/lower-case)
+    ("af" "credit" "-" "c")
+    (- amount)
+    ;all other values are kept as is
+    amount))
+
 ;; Remove quotes from start & end of the string, if both present
 (defn unquote-string [str]
   (let [len (count str)
@@ -463,7 +474,9 @@
 ;; Parse a line of CSV into a map with :date :ref :amount :descr
 (defn parse-csv-entry [params string]
   (let [cols (split-csv-line string (get-arg params :csv-field-separator))
-        amount (convert-amount (nth cols (get-arg params :amount-col)))]
+        amount
+        (-> (convert-amount (nth cols (get-arg params :amount-col)))
+            (debit-credit-amount (col-or-nil params cols :amount-credit)))]
     (case (get-arg params :file-kind)
       "AMEX-CSV"
       (amex-nl/parse-csv-columns (get-arg params :account) cols)
