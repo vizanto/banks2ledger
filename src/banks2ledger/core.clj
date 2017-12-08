@@ -483,7 +483,7 @@
 
       "CSV"
       (let [links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))]
-        [{:date (convert-date params (nth cols (get-arg params :date-col)))
+        [{:date (convert-date params (col-or-nil params cols :date-col))
           :flag "!"
           :reference (or (col-or-nil params cols :ref-col) (first links))
           :postings (row->postings params cols (BigDecimal. (str amount)))
