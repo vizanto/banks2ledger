@@ -377,7 +377,8 @@
 (defn unquote-string [str]
   (let [len (count str)
         last (dec len)]
-    (cond (< len 3) str
+    (cond (= "\"\"" str) ""
+          (< len 3) str
           (or (and (str/starts-with? str "'")  (str/ends-with? str "'"))
               (and (str/starts-with? str "\"") (str/ends-with? str "\"")))
           (subs str 1 last)
