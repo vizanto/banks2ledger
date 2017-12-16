@@ -1,7 +1,7 @@
 (ns banks2ledger.amex-nl
   (:require [clojure.string :as str]
             [cheshire.core :as json]
-            [banks2ledger.util :refer (abs)]))
+            [banks2ledger.util :refer (abs str->decimal)]))
 
 ;;
 ;; American Express
@@ -82,12 +82,6 @@
 ;;;
 ;;; CSV Parsing
 ;;;
-
-(defn str->decimal [amount]
-  (-> (str/trim amount)
-      (str/replace #"[.,](?=[0-9]{3})" "")
-      (str/replace #",(?=[0-9]{2}$)" ".")
-      (BigDecimal.)))
 
 (defn normalize-date [date-str]
   (str "20" (subs date-str 6 8) "-" (subs date-str 3 5) "-" (subs date-str 0 2)))
