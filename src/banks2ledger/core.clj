@@ -449,12 +449,10 @@
       (let [v (-> (nth cols n) unquote-string str/trim)]
         (when-not (empty? v) v)))))
 
-(defn row->postings [params cols amount]
-  (let [account (get-arg params :account)
-        currency (get-arg params :currency)
+(defn row->postings [params cols amount account forex-fees-account]
+  (let [currency (get-arg params :currency)
         amount-positive (get-arg params :amount-positive)
         amount (if amount-positive (- amount) #_else amount)
-        forex-fees-account (get-arg params :forex-fees-account)
         foreign-amount (col-or-nil params cols :foreign-amount-col)
         foreign-currency (col-or-nil params cols :foreign-currency-col)
         foreign-conversion (col-or-nil params cols :foreign-conversion-col)]
@@ -475,19 +473,21 @@
 ;; Parse a line of CSV into a map with :date :ref :amount :descr
 (defn parse-csv-entry [params string]
   (let [cols (split-csv-line string (get-arg params :csv-field-separator))
+        account (get-arg params :account)
+        forex-fees-account (get-arg params :forex-fees-account)
         amount
         (-> (convert-amount (nth cols (get-arg params :amount-col)))
             (debit-credit-amount (col-or-nil params cols :amount-credit)))]
     (case (get-arg params :file-kind)
       "AMEX-CSV"
-      (amex-nl/parse-csv-columns (get-arg params :account) cols)
+      (amex-nl/parse-csv-columns account forex-fees-account cols)
 
       "CSV"
       (let [links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))]
         [{:date (convert-date params (col-or-nil params cols :date-col))
           :flag "!"
           :reference (or (col-or-nil params cols :ref-col) (first links))
-          :postings (row->postings params cols (BigDecimal. (str amount)))
+          :postings (row->postings params cols (BigDecimal. (str amount)) account forex-fees-account)
           :payee (col-or-nil params cols :payee-col)
           :links links
           :tags  (some-> (col-or-nil params cols :tags-col) (str/split #"\s*,\s*"))
@@ -512,13 +512,14 @@
 ;; Parse input JSON into a list of maps
 (defn parse-json [params existing-txn]
   (let [account (get-arg params :account)
+        ffacct  (get-arg params :forex-fees-account)
         json    (binding [*use-bigdecimals?* true]
                   (-> (get-arg params :csv-file)
                       (io/reader)
                       (json/parse-stream true)))]
     (->> (case (get-arg params :file-kind)
            "AMEX-JSON"
-           (mapcat #(amex-nl/parse-json-transaction account %) (:transactions json)))
+           (mapcat #(amex-nl/parse-json-transaction account ffacct %) (:transactions json)))
          (update-from-existing-txn account existing-txn))))
 
 (defn postings->main-account [non-main-accounts postings]

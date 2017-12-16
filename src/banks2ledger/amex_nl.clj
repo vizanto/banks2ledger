@@ -7,7 +7,6 @@
 ;; American Express
 ;;
 
-(def conversion-account-str "Expenses:Bank-fees:NL:AMEX:Conversion")
 (def internal-payees #{"HARTELIJK BEDANKT VOOR UW BETALING"})
 
 ;;;
@@ -15,7 +14,7 @@
 ;;;
 
 
-(defn create-postings [liability-account-str,
+(defn create-postings [liability-account-str, conversion-account-str,
                        {:keys [amount reference date posting-date payee card-account
                                description charge-amount charge-currency conversion-fee]}]
   {:pre [amount date
@@ -109,10 +108,11 @@
     (if amount
       [(BigDecimal. ^String amount) currency (BigDecimal. ^String fee)])))
 
-(defn parse-csv-columns [liability-account-str, [date reference amount payee notes :as csv]]
+(defn parse-csv-columns
+  [liability-account-str, conversion-account-str, [date reference amount payee notes :as csv]]
   (let [[charge-amount charge-currency conversion-fee]
         (notes->forex notes)]
-    (create-postings liability-account-str,
+    (create-postings liability-account-str, conversion-account-str,
      {:amount          (str->decimal amount)
       :reference       (-> reference (str/replace #"Reference: " "") (str/replace #"\s" "-"))
       :date            (normalize-date date)
@@ -128,11 +128,11 @@
 ;;;
 
 (defn parse-json-transaction
-  [liability-account-str,
+  [liability-account-str, conversion-account-str,
    {:keys [description amount first_name foreign_details reference_id type charge_date identifier
            statement_end_date last_name embossed_name supplementary_index post_date]}]
   {:pre [(-> amount decimal?)]}
-  (create-postings liability-account-str,
+  (create-postings liability-account-str, conversion-account-str,
    {:amount          amount
     :reference       reference_id
     :date            charge_date
