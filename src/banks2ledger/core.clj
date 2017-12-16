@@ -368,7 +368,7 @@
 
 (defn debit-credit-amount [amount debit-credit-str]
   (case (some-> debit-credit-str str/lower-case)
-    ("af" "credit" "-" "c")
+    ("af" "debit" "-" "d")
     (- amount)
     ;all other values are kept as is
     amount))
