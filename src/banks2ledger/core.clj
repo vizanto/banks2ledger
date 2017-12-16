@@ -1,5 +1,6 @@
 (ns banks2ledger.core
   (:require [banks2ledger.amex-nl :as amex-nl]
+            [banks2ledger.knab-nl :as knab-nl]
             [banks2ledger.util :refer (abs)]
             [custom.transforms :refer (apply-entry-transforms)]
             [clojure.string :as str]
@@ -482,6 +483,9 @@
       "AMEX-CSV"
       (amex-nl/parse-csv-columns account forex-fees-account cols)
 
+      "KNAB-CSV"
+      (knab-nl/parse-csv-columns account forex-fees-account (map unquote-string cols))
+
       "CSV"
       (let [links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))]
         [{:date (convert-date params (col-or-nil params cols :date-col))
@@ -584,7 +588,7 @@
 
 (defn read-file [params existing-txn]
   (case (get-arg params :file-kind)
-    ("CSV", "AMEX-CSV")
+    ("CSV", "AMEX-CSV", "KNAB-CSV")
     (parse-csv params existing-txn)
 
     "AMEX-JSON"

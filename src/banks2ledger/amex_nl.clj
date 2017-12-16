@@ -75,7 +75,7 @@
            :postings [{:account authed-account, :amount amount, :currency "EUR"}
                       {:account posted-account}]})]
     (if posted-now?
-      [(assoc transaction :descr description)]
+      [transaction]
      ;else
       [transaction posting])))
 
