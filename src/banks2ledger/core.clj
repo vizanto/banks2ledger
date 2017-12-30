@@ -318,6 +318,10 @@
   (let [val (get map2 key)]
     (if (nil? val) map #_else (assoc map key val))))
 
+(defn update-flag [new-entry {:keys [flag] :as existing-entry}]
+  (if-not (= flag "*") new-entry
+   #_else (assoc new-entry :flag "*")))
+
 ;; Adjust :postings in new-entry with information from existing parsed ledger
 (defn update-uncategorized [{:keys [postings] :as new-entry} src-account existing-entry]
   (if-not (some #(-> % :account (= :uncategorized)) postings)
@@ -335,7 +339,7 @@
 (defn update-from-existing-entry [new-entry src-account existing-entry]
   (-> new-entry
    (update-uncategorized src-account existing-entry)
-   (assoc-non-nil-from existing-entry :flag)
+   (update-flag existing-entry)
    (assoc-non-nil-from existing-entry :links)
    (assoc-non-nil-from existing-entry :tags)
    (assoc-non-nil-from existing-entry :descr)))
