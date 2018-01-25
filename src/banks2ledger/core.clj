@@ -210,7 +210,7 @@
     :help "CSV trailer lines to skip"}
 
    :currency
-   {:opt "-c" :value "SEK" :help "Currency"}
+   {:opt "-c" :value "SEK" :help "Currency: String or column index (zero-based)"}
 
    :date-format
    {:opt "-D" :value "yyyy-MM-dd" :help "Format of date field in CSV file"}
@@ -451,14 +451,19 @@
         spec-list (split-by-indices colspec delim-ixs)]
     (get-col-1 cols spec-list)))
 
+(defn get-trimmed-col [cols n]
+  (let [v (-> (nth cols n) unquote-string str/trim)]
+    (when-not (empty? v) v)))
+
 (defn col-or-nil [params cols key]
   (when-let [n (get-arg params key)]
     (when (>= n 0)
-      (let [v (-> (nth cols n) unquote-string str/trim)]
-        (when-not (empty? v) v)))))
+      (get-trimmed-col cols n))))
 
 (defn row->postings [params cols amount account forex-fees-account]
   (let [currency (get-arg params :currency)
+        currency (if (re-matches #"[0-9]+" currency) (get-trimmed-col cols (Integer. currency))
+                  #_else currency)
         amount-positive (get-arg params :amount-positive)
         amount (if amount-positive (- amount) #_else amount)
         foreign-amount (col-or-nil params cols :foreign-amount-col)
