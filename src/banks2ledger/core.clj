@@ -171,7 +171,7 @@
                    (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
                    (map (partial clip-string " ")))]
     {:date date :toks toks :accs accs :flag flag :descr (when-not (empty? descr) descr)
-     :tags tags :links links}))
+     :payee payee :tags tags :links links}))
 
 ;; Read and parse a beancount file; return tokenized entries
 (defn parse-beancount [filename]
@@ -344,6 +344,7 @@
    (update-flag existing-entry)
    (assoc-non-nil-from existing-entry :links)
    (assoc-non-nil-from existing-entry :tags)
+   (assoc-non-nil-from existing-entry :payee)
    (assoc-non-nil-from existing-entry :descr)))
 
 ;; Adjust entries with information from parsed beancount/ledger
