@@ -1,6 +1,7 @@
 (ns banks2ledger.core
   (:require [banks2ledger.amex-nl :as amex-nl]
             [banks2ledger.knab-nl :as knab-nl]
+            [banks2ledger.sc-hk :as sc-hk]
             [banks2ledger.util :refer (abs)]
             [custom.transforms :refer (apply-entry-transforms)]
             [clojure.string :as str]
@@ -196,7 +197,7 @@
     :help "Originating account of transactions"}
 
    :file-kind
-   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-JSON, AMEX-CSV or CSV (default: CSV)"}
+   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-JSON, AMEX-CSV, SCHK-CSV or CSV (default: CSV)"}
 
    :csv-field-separator
    {:opt "-F" :value "," :help "CSV field separator"}
@@ -497,6 +498,9 @@
       "KNAB-CSV"
       (knab-nl/parse-csv-columns account forex-fees-account (map unquote-string cols))
 
+      "SCHK-CSV"
+      (sc-hk/parse-csv-columns account forex-fees-account (map unquote-string cols))
+
       "CSV"
       (let [links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))]
         [{:date (convert-date params (col-or-nil params cols :date-col))
@@ -605,7 +609,7 @@
 
 (defn read-file [params existing-txn]
   (case (get-arg params :file-kind)
-    ("CSV", "AMEX-CSV", "KNAB-CSV")
+    ("CSV", "AMEX-CSV", "KNAB-CSV", "SCHK-CSV")
     (parse-csv params existing-txn)
 
     "AMEX-JSON"
