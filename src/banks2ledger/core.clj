@@ -478,9 +478,8 @@
                        " @@ " (-> (- amount) (- (or foreign-conversion 0)) abs))}]))))
 
 ;; Parse a line of CSV into a map with :date :ref :amount :descr
-(defn parse-csv-entry [params string]
-  (let [cols (split-csv-line string (get-arg params :csv-field-separator))
-        account (get-arg params :account)
+(defn parse-csv-entry [params cols]
+  (let [account (get-arg params :account)
         forex-fees-account (get-arg params :forex-fees-account)
         amount
         (-> (convert-amount (nth cols (get-arg params :amount-col)))
@@ -509,12 +508,18 @@
           (get-arg params :csv-skip-header-lines)
           (- (count lines) (get-arg params :csv-skip-trailer-lines))))
 
+(defn date-sorted-rows [params seq]
+  (if-let [n (get-arg params :date-col)] (sort-by #(convert-date params (nth % n)) seq)
+   #_else seq))
+
 ;; Parse input CSV into a list of maps
 (defn parse-csv [params existing-txn]
   (->> (-> (slurp (get-arg params :csv-file))
            (str/split #"\n")
            (drop-lines params))
        (map str/trim-newline)
+       (map #(split-csv-line % (get-arg params :csv-field-separator)))
+       (date-sorted-rows params)
        (mapcat #(parse-csv-entry params %))
        (map apply-entry-transforms)
        (update-from-existing-txn (get-arg params :account) existing-txn)))
