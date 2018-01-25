@@ -70,8 +70,10 @@
 ;; Combine probability values according to the Bayes theorem
 (defn bayes* [probs]
   (let [prod-probs (apply * probs)
-        prod-comps (apply * (map #(- 1.0 %) probs))]
-    (/ prod-probs (+ prod-probs prod-comps))))
+        prod-comps (apply * (map #(- 1.0 %) probs))
+        prod-added (+ prod-probs prod-comps)]
+    (if-not (zero? prod-added) (/ prod-probs prod-added)
+     #_else 0.01)))
 
 ;; Combined p_belong of given tokens for account
 (defn p_belong* [acc-maps tokens account]
