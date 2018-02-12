@@ -469,7 +469,8 @@
 
 (defn row->postings [params cols amount account forex-fees-account]
   (let [currency (get-arg params :currency)
-        currency (if (re-matches #"[0-9]+" currency) (get-trimmed-col cols (Integer. currency))
+        currency (if (re-matches #"[0-9]+" currency)
+                   (get-trimmed-col cols (Integer. (str currency)))
                   #_else currency)
         amount-positive (get-arg params :amount-positive)
         amount (if amount-positive (- amount) #_else amount)
