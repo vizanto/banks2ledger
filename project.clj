@@ -5,6 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [io.replikativ/hasch "0.3.4" :exclusions [com.cemerick/austin]]
+                 [clj-time "0.14.2"]
                  [cheshire "5.7.1"]]
   :global-vars {*warn-on-reflection* true}
   :main ^:skip-aot banks2ledger.core

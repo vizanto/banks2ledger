@@ -1,6 +1,7 @@
 (ns banks2ledger.core
   (:require [banks2ledger.amex-nl :as amex-nl]
             [banks2ledger.knab-nl :as knab-nl]
+            [banks2ledger.paypal :as paypal]
             [banks2ledger.sc-hk :as sc-hk]
             [banks2ledger.util :refer (abs)]
             [custom.transforms :refer (apply-entry-transforms)]
@@ -203,7 +204,7 @@
     :help "Originating account of transactions"}
 
    :file-kind
-   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-JSON, AMEX-CSV, SCHK-CSV or CSV (default: CSV)"}
+   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-JSON, AMEX-CSV, PayPal-CSV, SCHK-CSV or CSV (default: CSV)"}
 
    :csv-field-separator
    {:opt "-F" :value "," :help "CSV field separator"}
@@ -364,6 +365,12 @@
      ;else
       (update-from-existing-entry new-entry src-account existing-entry))))
 
+;; Combine related entries if required by format
+(defn combine-related-txns [params entries]
+  (case (get-arg params :file-kind)
+    "PayPal-CSV" (paypal/combine-related-txns entries)
+    #_else       entries))
+
 ;; Convert date field from CSV format to Ledger entry format
 (defn convert-date [args-spec datestr]
   (.format
@@ -494,10 +501,7 @@
 ;; Parse a line of CSV into a map with :date :ref :amount :descr
 (defn parse-csv-entry [params cols]
   (let [account (get-arg params :account)
-        forex-fees-account (get-arg params :forex-fees-account)
-        amount
-        (-> (convert-amount (nth cols (get-arg params :amount-col)))
-            (debit-credit-amount (col-or-nil params cols :amount-credit)))]
+        forex-fees-account (get-arg params :forex-fees-account)]
     (case (get-arg params :file-kind)
       "AMEX-CSV"
       (amex-nl/parse-csv-columns account forex-fees-account cols)
@@ -508,8 +512,14 @@
       "SCHK-CSV"
       (sc-hk/parse-csv-columns account forex-fees-account (map unquote-string cols))
 
+      "PayPal-CSV"
+      (paypal/parse-csv-columns account forex-fees-account (map unquote-string cols))
+
       "CSV"
-      (let [links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))]
+      (let [links (some-> (col-or-nil params cols :links-col) (str/split #"\s*,\s*"))
+            amount
+            (-> (convert-amount (nth cols (get-arg params :amount-col)))
+                (debit-credit-amount (col-or-nil params cols :amount-credit)))]
         [{:date (convert-date params (col-or-nil params cols :date-col))
           :flag "!"
           :reference (or (col-or-nil params cols :ref-col) (first links))
@@ -526,7 +536,8 @@
           (- (count lines) (get-arg params :csv-skip-trailer-lines))))
 
 (defn date-sorted-rows [params seq]
-  (if-let [n (get-arg params :date-col)] (sort-by #(convert-date params (nth % n)) seq)
+  (if-let [n (get-arg params :date-col)]
+    (sort-by #(convert-date params (unquote-string (nth % n))) seq)
    #_else seq))
 
 ;; Parse input CSV into a list of maps
@@ -539,6 +550,8 @@
        (date-sorted-rows params)
        (mapcat #(parse-csv-entry params %))
        (map apply-entry-transforms)
+       (remove nil?)
+       (combine-related-txns params)
        (update-from-existing-txn (get-arg params :account) existing-txn)))
 
 ;; Parse input JSON into a list of maps
@@ -551,7 +564,8 @@
                       (json/parse-stream true)))]
     (->> (case (get-arg params :file-kind)
            "AMEX-JSON"
-           (mapcat #(amex-nl/parse-json-transaction account ffacct %) (:transactions json)))
+           (mapcat #(amex-nl/parse-json-transaction account ffacct %) (:transactions json))
+           (map apply-entry-transforms))
          (update-from-existing-txn account existing-txn))))
 
 (defn postings->main-account [non-main-accounts postings]
@@ -616,7 +630,7 @@
 
 (defn read-file [params existing-txn]
   (case (get-arg params :file-kind)
-    ("CSV", "AMEX-CSV", "KNAB-CSV", "SCHK-CSV")
+    ("CSV", "AMEX-CSV", "KNAB-CSV", "PayPal-CSV", "SCHK-CSV")
     (parse-csv params existing-txn)
 
     "AMEX-JSON"
