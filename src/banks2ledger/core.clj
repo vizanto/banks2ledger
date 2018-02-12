@@ -167,12 +167,18 @@
         tags  (some->> extra (re-seq beancount-tags-re)  (map #(subs % 1)))
         links (some->> extra (re-seq beancount-links-re) (map #(subs % 1)))
         toks  (when-not (= "!" flag) (concat (tokenize (or payee "")) (tokenize (or descr ""))))
+        metas (->> rest-lines
+                   (map str/trim)
+                   (filter #(re-find #"^[a-z].+:.+" %)) ; meta starts lower-case, followed by :
+                   (map #(clojure.string/split % #":\s*" 2))
+                   (into {}))
         accs  (->> rest-lines
                    (map str/trim)
                    (filter #(re-find #"^[A-Z].+" %)) ; Accounts are always Capitalized
                    (map (partial clip-string " ")))]
+    ;(binding [*out* *err*] (prn first-line metas))
     {:date date :toks toks :accs accs :flag flag :descr (when-not (empty? descr) descr)
-     :payee payee :tags tags :links links}))
+     :payee payee :tags tags :metas metas :links links}))
 
 ;; Read and parse a beancount file; return tokenized entries
 (defn parse-beancount [filename]
