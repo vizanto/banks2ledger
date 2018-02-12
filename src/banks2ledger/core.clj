@@ -632,8 +632,8 @@
         acc-maps     (apply dissoc-nested acc-maps non-main-accounts)
         sub-acc-maps (ledger->sub-acc-maps src-account existing-ledger)
         sub-acc-maps (apply dissoc-nested sub-acc-maps non-main-accounts)]
-    (doseq [{:keys [payee descr] :as entry} entries]
-      (f (->> entry :postings
+    (doseq [{:keys [payee descr postings] :as entry} entries :when postings]
+      (f (->> postings
               (decide-all-accounts src-account acc-maps sub-acc-maps unknown-account
                                    non-main-accounts (str+ payee descr))
               (assoc entry :postings))))))
