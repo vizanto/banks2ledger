@@ -29,8 +29,8 @@
         (->>
           {"datetime"         (str \" datetime \")
            "transaction-id"   (str \" reference \")
-           "invoice-id"       (when-not (empty? invoice-id)       (str \" invoice-id \"))
-           "reference-txn-id" (when-not (empty? reference-txn-id) (str \" reference-txn-id \"))}
+           "reference-txn-id" (when-not (empty? reference-txn-id) (str \" reference-txn-id \"))
+           "invoice-id"       (when-not (empty? invoice-id)       (str \" invoice-id \"))}
           (remove (fn [[k v]] (empty? v)))
           (into {}))
 
