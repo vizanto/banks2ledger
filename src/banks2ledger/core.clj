@@ -323,10 +323,18 @@
 
 (defn assoc-non-nil-from
   "Lookup key in map2 and associate its value to map.
-   Leaves map2 as is when value is nil."
+   Leaves map as is when value is nil."
   [map map2 key]
   (let [val (get map2 key)]
     (if (nil? val) map #_else (assoc map key val))))
+
+(defn concat-distinct-non-nil-from
+  "Lookup key in map2 and concat its distinct values to map.
+   Leaves map as is when value is nil."
+  [map map2 key]
+  (let [val2 (get map2 key)
+        val1 (get map key)]
+    (if (nil? val2) map #_else (assoc map key (apply conj val1 (remove (set val1) val2))))))
 
 (defn update-flag [new-entry {:keys [flag] :as existing-entry}]
   (if-not (= flag "*") new-entry
@@ -350,8 +358,8 @@
   (-> new-entry
    (update-uncategorized src-account existing-entry)
    (update-flag existing-entry)
-   (assoc-non-nil-from existing-entry :links)
-   (assoc-non-nil-from existing-entry :tags)
+   (concat-distinct-non-nil-from existing-entry :links)
+   (concat-distinct-non-nil-from existing-entry :tags)
    (assoc-non-nil-from existing-entry :payee)
    (assoc-non-nil-from existing-entry :descr)))
 
