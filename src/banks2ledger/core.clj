@@ -653,10 +653,18 @@
               (assoc entry :postings))))))
 
 (defn group-by-links [entries]
-  (->> entries
-   (mapcat #(if-let [id (get-in % [:metas "transaction-id"])] [(assoc % :link (unquote-string id))]
-             #_else (for [l (:links %)] (assoc % :link l))))
-   (group-by :link)))
+  (let [transactions-with-id
+        (->> entries
+             (map #(when-let [id (get-in % [:metas "transaction-id"])] [(unquote-string id) [%]]))
+             (remove nil?)
+             (into {}))
+        transactions-with-only-links
+        (->> entries
+             (mapcat #(when-not (get-in % [:metas "transaction-id"])
+                       (for [l (:links %) :when (nil? (transactions-with-id l))]
+                         (assoc % :link l))))
+             (group-by :link))]
+    (conj transactions-with-only-links transactions-with-id)))
 
 ;; Convert CSV of bank account transactions to corresponding ledger entries
 (defn -main [& args]
