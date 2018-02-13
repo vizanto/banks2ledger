@@ -35,7 +35,7 @@
           (into {}))
 
         fee-posting
-        (when (> fee 0)
+        (when (or (> fee 0) (< fee 0))
           {:account conversion-account-str
            :amount fee, :currency currency})
 
@@ -47,12 +47,7 @@
          :reference reference
          :links     (when-not (empty? reference-txn-id) [reference-txn-id])
          :metas     metas
-         :postings  (remove nil?
-                     [(if (:amount from-transfer) from-transfer to-transfer)
-                      fee-posting
-                      (if (:amount from-transfer) to-transfer from-transfer)
-                      ; forex-posting
-                      ])
+         :postings  (remove nil? [from-transfer, fee-posting, to-transfer])
         }]
     [transaction]))
 
@@ -97,7 +92,7 @@
         (remove #(-> % :account (= :uncategorized))
                 (concat (:postings txn1) (:postings txn2)))
         _
-        (assert (= 2 (count postings)) "Expected a total of 2 postings for currency conversion")
+        (assert (= 2 (count postings)) (str "Expected a total of 2 postings for currency conversion, got " (vec postings)))
         _
         (assert (neg? (:amount posting1)) "Expected first conversion transaction to be negative")
         _
