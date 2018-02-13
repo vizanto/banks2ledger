@@ -93,18 +93,22 @@
   (let [[posting1 posting2 :as postings]
         (remove #(-> % :account (= :uncategorized))
                 (concat (:postings txn1) (:postings txn2)))
+        positive
+        (if (-> posting2 :amount pos?) posting2 #_else posting1)
+        negative
+        (if (-> posting1 :amount neg?) posting1 #_else posting2)
         _
         (assert (= 2 (count postings)) (str "Expected a total of 2 postings for currency conversion, got " (vec postings)))
         _
-        (assert (neg? (:amount posting1)) "Expected first conversion transaction to be negative")
+        (assert (neg? (:amount negative)) (str "Expected " negative " conversion transaction to be negative"))
         _
-        (assert (pos? (:amount posting2)) "Expected second conversion transaction to be positive")
+        (assert (pos? (:amount positive)) (str "Expected " positive " conversion transaction to be positive"))
 
         posting1
-        (assoc posting1 :amount (str (:amount posting2) " " (:currency posting2)
-                                     " @@ " (- (:amount posting1))))
+        (assoc negative :amount (str (:amount positive) " " (:currency positive)
+                                     " @@ " (- (:amount negative))))
         posting2
-        (dissoc posting2 :amount)
+        (dissoc positive :amount)
 
         links
         (vec (apply conj #{(:reference txn2)} (concat (:links txn1) (:links txn2))))]
