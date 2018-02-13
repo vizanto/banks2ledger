@@ -466,7 +466,7 @@
     (get-col-1 cols spec-list)))
 
 (defn get-trimmed-col [cols n]
-  (let [v (-> (nth cols n) unquote-string str/trim)]
+  (let [v (-> (nth cols n "") unquote-string str/trim)]
     (when-not (empty? v) v)))
 
 (defn col-or-nil [params cols key]
