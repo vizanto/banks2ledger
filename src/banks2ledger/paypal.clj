@@ -13,14 +13,15 @@
 ;;
 
 (defn create-postings [asset-account-str, conversion-account-str,
-                       {:keys [date datetime description currency amount fee reference
+                       {:keys [date datetime description currency amount gross-amount fee reference
                                name email-address invoice-id reference-txn-id]}]
   {:pre [amount date]}
   (let [from-transfer
         {:account asset-account-str, :amount amount, :currency currency}
 
         to-transfer
-        {:account :uncategorized, :currency currency}
+        {:account :uncategorized, :amount (when-not (= amount gross-amount) (- gross-amount))
+         :currency currency}
 
         payee
         (if (empty? email-address) name #_else (str name " <" email-address ">"))
@@ -77,6 +78,7 @@
       :description      (.intern (str description))
       :currency         currency
       :amount           (str->decimal net)
+      :gross-amount     (str->decimal gross)
       :fee              (- (str->decimal fee))
       :reference        transaction-id
       :name             name
