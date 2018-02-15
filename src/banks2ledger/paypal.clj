@@ -108,7 +108,7 @@
         (assoc negative :amount (str (:amount positive) " " (:currency positive)
                                      " @@ " (- (:amount negative))))
         posting2
-        (dissoc positive :amount)
+        (assoc positive :amount (:amount negative) :currency (:currency negative))
 
         links
         (vec (apply conj #{(:reference txn2)} (concat (:links txn1) (:links txn2))))]
