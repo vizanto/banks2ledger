@@ -71,7 +71,11 @@
           (into {}))
 
         transaction
-        {:date      date
+        {:date      (if (or (= "Geldautomaat buitenland" payment-kind)
+                            (str/starts-with? payee-account "NL"))
+                     posting-date
+                     ;else
+                      date)
          :flag      "!"
          :payee     payee
          :descr     description
