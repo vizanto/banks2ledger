@@ -62,13 +62,15 @@
 ;; P_belong is the probability that a transaction with
 ;; token in its descriptor belongs to account.
 ;; acc-maps is the output of parse-ledger or parse-beancount.
-(defn p_belong [acc-maps token account]
+(defn p_belong-% [acc-maps token account]
   (let [p_occ (p_occur acc-maps token account)
         p_occ_all (apply + (map (fn [acc] (p_occur acc-maps token acc))
                                 (keys acc-maps)))]
     (if (= 0.0 p_occ_all)
       0.0
       (/ p_occ p_occ_all))))
+
+(def p_belong (memoize p_belong-%))
 
 ;; Combine probability values according to the Bayes theorem
 (defn bayes* [probs]
@@ -85,11 +87,13 @@
 
 ;; Return a list of [p_belong, account] pairs in descending order
 ;; only accounts with nonzero probs are returned
-(defn best-accounts [acc-maps token]
+(defn best-accounts-% [acc-maps token]
   (sort-by first >
            (filter #(> (first %) 0.0)
                    (map (fn [acc] [(p_belong acc-maps token acc) acc])
                         (keys acc-maps)))))
+
+(def best-accounts (memoize best-accounts-%))
 
 ;; Print a table of combined probs for given tokens
 (defn p_table [acc-maps tokens]
