@@ -9,7 +9,7 @@
 ;;
 
 (def sc-regex
-  #"FEE INV#[0-9]{8,} .*| .*? NINT  [0-9]{4,}")
+  #"FEE INV#[0-9]{8,} .*|.*? NINT  [0-9]{4,}")
 
 (defn create-postings [asset-account-str, conversion-account-str,
                        {:keys [account reference amount currency date datetime location
