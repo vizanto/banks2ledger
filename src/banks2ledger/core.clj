@@ -503,8 +503,10 @@
          {:account forex-fees-account :currency currency :amount foreign-conversion}
          {:account :uncategorized
           :currency currency
-          :amount (str foreign-amount " " foreign-currency
-                       " @@ " (-> (- amount) (- (or foreign-conversion 0)) abs))}]))))
+          :amount (if (= foreign-currency currency) foreign-amount
+          									;else
+          								  (str foreign-amount " " foreign-currency
+                         " @@ " (-> (- amount) (- (or foreign-conversion 0)) abs)))}]))))
 
 ;; Parse a line of CSV into a map with :date :ref :amount :descr
 (defn parse-csv-entry [params cols]
