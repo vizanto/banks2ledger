@@ -530,7 +530,7 @@
                 (debit-credit-amount (col-or-nil params cols :amount-credit)))]
         [{:date (convert-date params (col-or-nil params cols :date-col))
           :flag "!"
-          :reference (or (col-or-nil params cols :ref-col) (first links))
+          :reference (some-> (or (col-or-nil params cols :ref-col) (first links)) (str/replace #"[ :]" "_"))
           :postings (row->postings params cols (BigDecimal. (str amount)) account forex-fees-account)
           :payee (col-or-nil params cols :payee-col)
           :links links
