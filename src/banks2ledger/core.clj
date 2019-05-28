@@ -1,5 +1,6 @@
 (ns banks2ledger.core
   (:require [banks2ledger.amex-nl :as amex-nl]
+            [banks2ledger.ics-nl :as ics-nl]
             [banks2ledger.knab-nl :as knab-nl]
             [banks2ledger.paypal :as paypal]
             [banks2ledger.sc-hk :as sc-hk]
@@ -204,7 +205,7 @@
     :help "Originating account of transactions"}
 
    :file-kind
-   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-JSON, AMEX-CSV, PayPal-CSV, SCHK-CSV or CSV (default: CSV)"}
+   {:opt "-k" :value "CSV" :help "Transaction file type: AMEX-JSON, AMEX-CSV, PayPal-CSV, ICS-JSON, SCHK-CSV or CSV (default: CSV)"}
 
    :csv-field-separator
    {:opt "-F" :value "," :help "CSV field separator"}
@@ -575,7 +576,10 @@
     (->> (case (get-arg params :file-kind)
            "AMEX-JSON"
            (mapcat #(amex-nl/parse-json-transaction account ffacct %) (:transactions json))
-           (map apply-entry-transforms))
+           "ICS-JSON"
+           (map #(ics-nl/parse-json-transaction account ffacct %) json))
+         (map apply-entry-transforms)
+         (remove nil?)
          (update-from-existing-txn account existing-txn))))
 
 (defn postings->main-account [non-main-accounts postings]
@@ -643,7 +647,7 @@
     ("CSV", "AMEX-CSV", "KNAB-CSV", "PayPal-CSV", "SCHK-CSV")
     (parse-csv params existing-txn)
 
-    "AMEX-JSON"
+    ("AMEX-JSON", "ICS-JSON")
     (parse-json params existing-txn)))
 
 (defn dissoc-nested [m & keys]
