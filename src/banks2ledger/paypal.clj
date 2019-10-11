@@ -1,10 +1,7 @@
 (ns banks2ledger.paypal
   (:require [clojure.string :as str]
             [clojure.core.reducers :as reducers]
-            [clj-time.core :as t]
-            [cheshire.core :as json]
-            [hasch.core :refer (uuid)]
-            [banks2ledger.util :refer (abs)]))
+            [clj-time.core :as t]))
 
 ;;
 ;; Implements support for: PayPal -> Reports -> Statements -> Monthly/Custom CSV
@@ -87,7 +84,7 @@
       :reference-txn-id reference-txn-id})))
 
 
-;;; Collapse currency conversion postings
+;;; Fold currency conversion postings into 1 entry
 
 (defn combine-currency-conversions [txn1 txn2]
   (let [[posting1 posting2 :as postings]
@@ -139,7 +136,7 @@
             (->CombineState (assoc to-combine reference-txn-id candidate)
                             entries)))))))
 
-(defn combine-related-txns [entries]
+(defn fold-related-txns [entries]
   (->> entries
        (reducers/fold combine-currency-conversion-postings)
        :entries

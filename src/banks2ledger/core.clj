@@ -5,7 +5,7 @@
             [banks2ledger.paypal :as paypal]
             [banks2ledger.sc-hk :as sc-hk]
             [banks2ledger.util :refer (abs)]
-            [custom.transforms :refer (apply-entry-transforms)]
+            [custom.transforms :refer (apply-entry-transforms fold-related-txns)]
             [clojure.string :as str]
             [clojure.java.io :as io]
             [cheshire.core :as json]
@@ -378,11 +378,11 @@
      ;else
       (update-from-existing-entry new-entry src-account existing-entry))))
 
-;; Combine related entries if required by format
-(defn combine-related-txns [params entries]
+;; Fold related entries if supported by format or customization
+(defn dispatch-fold-related-txns [params entries]
   (case (get-arg params :file-kind)
-    "PayPal-CSV" (paypal/combine-related-txns entries)
-    #_else       entries))
+    "PayPal-CSV" (paypal/fold-related-txns entries)
+    #_else       (fold-related-txns entries)))
 
 ;; Convert date field from CSV format to Ledger entry format
 (defn convert-date [args-spec datestr]
@@ -566,7 +566,7 @@
        (mapcat #(parse-csv-entry params %))
        (map apply-entry-transforms)
        (remove nil?)
-       (combine-related-txns params)
+       (dispatch-fold-related-txns params)
        (update-from-existing-txn (get-arg params :account) existing-txn)))
 
 ;; Parse input JSON into a list of maps
